@@ -1,5 +1,16 @@
 # Laufapp Changelog
 
+## v0.2.0 – 2026-08-28
+
+- Mehrere zukünftige Wettkämpfe können unter **Einstellungen → Rennen** gepflegt, bearbeitet und gelöscht werden. Bestehende v0.1.9-Wettkämpfe werden kompatibel als A-Rennen behandelt.
+- **A-Rennen** steuern den Trainingsblock vollständig; das jeweils nächste zukünftige A-Rennen ist der Planfokus, nach dessen Rennwoche übernimmt automatisch das nächste A-Rennen.
+- **B-Rennen** lösen keinen Taper und keine Änderung der vorherigen Trainingswochen aus. In ihrer Rennwoche ersetzen sie ausschließlich den Longrun; die übrigen Trainingseinheiten bleiben in einer normalen konfliktfreien Woche unverändert.
+- Jedes Rennen besitzt eine eigene Zielzeit. Direkt darunter zeigt Laufapp dezent die datenbasierte aktuelle Zeitprognose inklusive Prognosebereich an; die Empfehlung kann optional als Ziel übernommen werden.
+- Trainingsumfang erhält eine echte rennrelative Blockprogression: aufeinanderfolgende Build-/Specific-Belastungswochen können innerhalb eines Blocks ansteigen, Recovery, Nutzerobergrenzen, Detraining und Taper bleiben harte Gegenbedingungen.
+- Absolvierte, mit einem realen Lauf verknüpfte Einheiten können direkt aus der Wochenansicht einem Schuh zugeordnet werden. Die vorhandene `runs.shoe_id`-Zuordnung wird verwendet, sodass die Kilometerbilanz des Schuhs sofort mit dem real gelaufenen Umfang steigt. Die bestehende Zuordnung im Fortschritt-Tab bleibt erhalten.
+- Keine neue Datenbankschemaversion nötig: A/B-Klassifikation wird kompatibel in den bestehenden persistenten Einstellungen gespeichert; vorhandene Läufe, Health-Daten, Schuhe, Trainingspläne und manuelle Änderungen bleiben erhalten.
+- Home-Assistant-Ingress, `ingress_stream`, persistente SQLite-Daten und die v0.1.9-Schutzmechanismen für manuelle/absolvierte Workouts bleiben erhalten.
+
 ## v0.1.9 – 2026-08-28
 
 - „Plan neu berechnen“ aus Einstellungen funktioniert auch ohne vorher geöffneten Woche-Tab; ein `start=null` wird als aktuelle Kalenderwoche behandelt statt als 422-Fehler mit `[object Object]` im Frontend zu enden.
