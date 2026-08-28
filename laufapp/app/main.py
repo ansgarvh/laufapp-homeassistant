@@ -101,9 +101,13 @@ def health_summary(c):
     return out
 
 def progress_volume(c, period:str):
-    months={'1m':1,'3m':3,'6m':6,'12m':12}[period]
-    today=date.today(); raw=today.year*12+today.month-1-months; year,month0=divmod(raw,12)
-    cutoff=date(year,month0+1,min(today.day,calendar.monthrange(year,month0+1)[1]))
+    today=date.today()
+    if period == 'this_year': cutoff=date(today.year,1,1)
+    elif period == 'last_year': cutoff,today=date(today.year-1,1,1),date(today.year-1,12,31)
+    else:
+        months={'1m':1,'3m':3,'6m':6,'12m':12}[period]
+        raw=today.year*12+today.month-1-months; year,month0=divmod(raw,12)
+        cutoff=date(year,month0+1,min(today.day,calendar.monthrange(year,month0+1)[1]))
     first=week_start_for(cutoff); last=week_start_for(today)
     buckets={}
     for r in c.execute("SELECT started_at,distance_km FROM runs WHERE substr(started_at,1,10)>=? AND substr(started_at,1,10)<=? ORDER BY started_at",(cutoff.isoformat(),today.isoformat())):
@@ -146,7 +150,7 @@ def api_dashboard():
 def api_week(start:date|None=Query(default=None)):
     with db_conn() as c:return week_summary(c,week_start_for(start or date.today()))
 @app.get('/api/progress/volume')
-def api_progress_volume(period:Literal['1m','3m','6m','12m']='3m'):
+def api_progress_volume(period:Literal['1m','3m','6m','12m','this_year','last_year']='3m'):
     with db_conn() as c:return progress_volume(c,period)
 @app.post('/api/plan/generate')
 def api_plan(start:date|None=Query(default=None),force:bool=False):
@@ -233,9 +237,11 @@ def api_run_add(p:RunPayload):
     with db_conn() as c:
         cur=c.execute("INSERT INTO runs(started_at,distance_km,duration_s,avg_hr,elevation_m,calories,rpe,shoe_id,notes,source) VALUES(?,?,?,?,?,?,?,?,?,?)",(p.started_at,p.distance_km,p.duration_s,p.avg_hr,p.elevation_m,p.calories,p.rpe,p.shoe_id,p.notes,p.source));rid=int(cur.lastrowid);wid=auto_match_run(c,rid);snapshot(c,'manual_run');return {'id':rid,'matched_workout_id':wid}
 @app.post('/api/apple-health/import-jobs',status_code=202)
-async def api_health_import_job(file:UploadFile=File(...)):
+async def api_health_import_job(file:UploadFile=File(...), replace_existing:bool=False):
     filename=file.filename or 'apple-health-export.zip'
-    suffix='.zip' if filename.lower().endswith('.zip') else '.xml'
+    lower=filename.lower()
+    if not (lower.endswith('.zip') or lower.endswith('.xml')):raise HTTPException(400,'Bitte eine ZIP-Datei oder export.xml auswählen.')
+    suffix='.zip' if lower.endswith('.zip') else '.xml'
     job_uuid=str(uuid.uuid4())
     target_path=import_storage_path(job_uuid,suffix)
     size=0
@@ -246,7 +252,7 @@ async def api_health_import_job(file:UploadFile=File(...)):
                 if size>MAX_HEALTH_UPLOAD:
                     raise HTTPException(413,'Der Health-Export ist größer als 2 GB.')
                 target.write(chunk)
-        job=create_import_job_with_uuid(job_uuid,filename,target_path,size)
+        job=create_import_job_with_uuid(job_uuid,filename,target_path,size,replace_existing)
         MANAGER.submit(int(job['id']))
         return job
     except Exception:
