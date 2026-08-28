@@ -1,6 +1,18 @@
-# Laufapp v0.1.9
+# Laufapp v0.2.0
 
 Private, mobile-first Lauf-PWA für Home Assistant OS auf dem Beelink Mini S12. Die App verbindet eine lokale Trainings-/Prognoseengine mit Apple-Health-Daten und einem optionalen OpenAI-Coach. Sie ist für genau einen Nutzer ausgelegt.
+
+## Highlights von v0.2.0
+
+- **Mehrere Rennen:** Unter **Einstellungen → Rennen** können mehrere zukünftige Wettkämpfe mit Name, Datum, Distanz, Typ und eigener Zielzeit verwaltet werden.
+- **A-Rennen:** steuern die vollständige Trainingsperiodisierung. Das nächste zukünftige A-Rennen ist der Planfokus; nach seiner Rennwoche übernimmt automatisch das nächste A-Rennen.
+- **B-Rennen:** lösen keinen eigenen Taper aus und verändern die Tage/Wochen davor nicht. In der Rennwoche ersetzen sie den Longrun; die übrigen Einheiten bleiben in einer normalen konfliktfreien Woche erhalten.
+- **Zielzeit-Empfehlung:** unter der Zielzeit jedes Rennens zeigt Laufapp dezent die aktuelle datenbasierte Prognose und den Prognosebereich an. Die Empfehlung kann übernommen werden, bleibt aber eine Nutzerentscheidung.
+- **Blockprogression:** Build-/Specific-Belastungswochen werden nicht mehr jede Woche isoliert aus derselben Basis berechnet. Innerhalb eines Belastungsblocks kann der Umfang deterministisch ansteigen; Recovery, Taper, Detraining und Nutzerlimits bleiben wirksam.
+- **Schuh nachträglich zuordnen:** Ein absolvierter, mit einem realen Lauf verknüpfter Wochenplan-Eintrag kann direkt einem Schuh zugeordnet werden. Die Kilometer des realen Laufs fließen sofort in die bestehende Schuhbilanz ein. Die Zuordnung im Fortschritt-Tab bleibt ebenfalls möglich.
+- **Kompatibel zu v0.1.9:** keine neue Datenbankschemaversion; bestehende Rennen werden bei fehlender A/B-Klassifikation als A-Rennen behandelt. Health-Daten, Läufe, Schuhe, manuelle Planänderungen und Ingress-Schutz bleiben erhalten.
+
+> Statisch/isoliert getestet; Home-Assistant-Integration muss auf dem Beelink verifiziert werden. Reale Nabu-Casa-, Beelink- und iPhone-Prüfungen stehen aus.
 
 ## Highlights von v0.1.9
 
@@ -31,11 +43,11 @@ Private, mobile-first Lauf-PWA für Home Assistant OS auf dem Beelink Mini S12. 
 
 - **Apple Health:** klare Diagnose für Zeitraum, ungültige Läufe sowie erkannt/vorhanden/neu; Drag & Drop für Exportdateien und optionaler transaktionssicherer Ersatz ausschließlich der Apple-Daten.
 - **Wochenübersicht:** der Drag-Griff tauscht geplante Workout-Karten zuverlässig oder verschiebt auf freie Tage; Wischen und „Verschieben“ bleiben erhalten.
-- **Fortschritt:** antippbare Wochenbalken mit dezent rotem Kilometer-Overlay, „Dieses Jahr“/„Letztes Jahr“ und lesbare, sparsame Langzeitbeschriftung.
+- **Fortschritt:** antippbare Wochenbalken mit dezent rot akzentuiertem Kilometer-Overlay, „Dieses Jahr“/„Letztes Jahr“ und lesbare, sparsame Langzeitbeschriftung.
 
 „Dieses Jahr“ läuft vom 1. Januar bis heute, „Letztes Jahr“ vom 1. Januar bis 31. Dezember des Vorjahres. „12 Monate“ bleibt davon getrennt ein rollierender Zeitraum. Bei Wochen über Silvester werden nur Läufe innerhalb des gewählten Kalenderjahres summiert.
 
-> Statisch/isoliert getestet; Home-Assistant-Integration muss auf dem Beelink verifiziert werden. Reale Nabu-Casa-, Beelink-, Home-Assistant- und iPhone-Prüfungen stehen aus.
+> Die Behebung des konkreten Produktionsimports muss mit dem realen Export auf dem Beelink bestätigt werden. Statisch/isoliert getestet; Home-Assistant-Integration muss auf dem Beelink verifiziert werden.
 
 ## Highlights von v0.1.5
 
@@ -54,8 +66,8 @@ Zeiträume sind rollierende Kalendermonate bis heute; die angebrochene aktuelle 
 
 ### Weiterhin enthalten aus v0.1.3
 
-- **Persistente Daten über Updates:** Läufe, Health-Metriken, Schuhe, Wettkämpfe, Trainingsplan, Bestleistungen und Coach-Historie bleiben in `/data/laufapp.sqlite3` erhalten.
-- **Versionierte Datenbankmigration:** v0.1.2 wird beim Start automatisch auf Schema 2 migriert. Vor jeder Schemaänderung entsteht eine SQLite-Sicherung unter `/data/backups/`; bei einem Migrationsfehler wird der Vorzustand wiederhergestellt und der App-Start abgebrochen.
+- **Persistente Daten über Updates:** Läufe, Health-Metriken, Schuhe, Wettkämpfe, Trainingsplan, Bestleistungen und Coach-Daten bleiben in `/data/laufapp.sqlite3` erhalten.
+- **Versionierte Datenbankmigration:** v0.1.2 wird beim Start automatisch auf Schema 2 migriert. Vor jeder Schemaänderung entsteht eine SQLite-Sicherung unter `/data/backups/`; bei einem Migrationsfehler wird der Vorzustand aus dem Backup wiederhergestellt und der App-Start abgebrochen.
 - **Apple Health als Hintergrundjob:** Nach abgeschlossenem Upload kann der Browser bzw. die Home-Assistant-App geschlossen oder minimiert werden. Der Beelink verarbeitet die Datei weiter. Status und Ergebnis bleiben abrufbar; ein durch App-Neustart unterbrochener Verarbeitungsjob wird beim nächsten Start erneut aufgenommen.
 - **Detaillierte Laufdaten:** Soweit Apple sie exportiert, werden zeitaufgelöste Herzfrequenz, Running Speed, Running Power, Schrittlänge, vertikale Oszillation, Bodenkontaktzeit, abgeleitete Kadenz sowie GPX-/Höhendaten einem Lauf zugeordnet.
 - **GitHub-Umzug vorbereitet:** v0.1.3 enthält einen sicheren Einmal-Transfer von der bisherigen lokalen Home-Assistant-App zur späteren GitHub-Repository-App, ohne erneuten Health-Import.
@@ -63,13 +75,14 @@ Zeiträume sind rollierende Kalendermonate bis heute; die angebrochene aktuelle 
 
 ## Bestehende Funktionen
 
-- **Heute:** aktiver Wettkampf, Zielzeit, Prognose, Zielbewertung, nächste Einheit, Recovery-Signale und offene Coach-Vorschläge.
-- **Woche:** 3–7 geplante Trainingseinheiten gemäß Einstellungen, Status, Wochenkilometer, RPE + Pace, Verschieben auch in angrenzende Wochen, Planqualitäts- und Longrun-Guardrails.
+- **Heute:** nächstes A-Rennen als Planfokus, Zielzeit, Prognose, Zielbewertung, nächste Einheit, Recovery-Signale und offene Coach-Vorschläge.
+- **Woche:** 3–7 geplante Trainingseinheiten gemäß Einstellungen, Status, Wochenkilometer, RPE + Pace, Verschieben auch in angrenzende Wochen, Planqualitäts- und Longrun-Guardrails; B-Rennen ersetzen in ihrer Rennwoche den Longrun.
 - **Trainingssteuerung:** konfigurierbare Lauftage, Qualitätseinheiten, automatische/manuelle Wochenobergrenze, maximale Longrun-Distanz sowie bestehende Guardrails.
-- **Fortschritt:** Prognosen für 5 km, 10 km, Halbmarathon und Marathon mit Unsicherheitsbereich, Wochenkilometer und Leistungsprofil.
+- **Rennen:** mehrere A-/B-Rennen, eigene Zielzeit, Laufapp-Zeitempfehlung und automatische A-Renn-Fokusübergabe.
+- **Fortschritt:** Prognosen für 5 km, 10 km, Halbmarathon und Marathon mit Unsicherheitsbereich, Wochenkilometer und Leistungsprofil; absolvierte Läufe können nachträglich einem Schuh zugeordnet werden.
 - **Apple Health:** exakt 24 Kalendermonate; Läufe, Ruhepuls, HRV, Schlaf, Gewicht und VO₂max; wiederholte Exporte werden dedupliziert.
 - **Schuhe:** Stammdaten, Startkilometer und Gesamtlaufstrecke je Schuh.
-- **AI Coach:** Chat, Fitness-Screenshot-Auslesen, Laufanalyse und optionaler wissenschaftlicher Wochencheck. Änderungen am Trainingsplan müssen immer bestätigt werden.
+- **AI Coach:** Chat, Fitness-Screenshot-Auslesen, Laufanalyse und optionaler wissenschaftlicher Wochencheck. Änderungen am Trainingsplan müssen immer bestätigtigt werden.
 - **KI-Budget:** standardmäßig 10 € pro Monat als Kostenschutz-Schätzung.
 
 ## Daten bleiben bei normalen Updates erhalten
@@ -92,7 +105,7 @@ Details: `GITHUB_SETUP.md` und `MIGRATIONS.md`.
 
 ## OpenAI API
 
-Der API-Key verbleibt serverseitig in der Home-Assistant-App-Konfiguration (`/data/options.json`) und wird nie an das Browser-Frontend ausgeliefert. Ohne API-Key funktionieren Plan, Prognosen, Health-Import, Wochenübersicht, Läufe und Schuhe vollständig.
+Der API-Key verbleibt serverseitig in der Home-Assistant-App-Konfiguration (`/data/options.json`) und wird nie an das Browser-Frontend ausgeliefert. Ohne API-Key funktionieren Plan, Prognosen, Health-Import, Wochenübersicht, Läufe, Schuhe und Rennverwaltung vollständig.
 
 Standardmodelle: `gpt-5.6-terra` für den Coach und `gpt-5.6-luna` für Screenshot-Extraktion. Wissenschaftliche Websuche ist optional.
 
@@ -109,5 +122,5 @@ cd laufapp/app
 export LAUFAPP_DATA_DIR=/tmp/laufapp-data
 export LAUFAPP_TRANSFER_DIR=/tmp/laufapp-transfer
 export LAUFAPP_TRUSTED_INGRESS_ONLY=0
-uvicorn main:app --host 127.0.0.1 --port 8099
+uvicorn main_v020:app --host 127.0.0.1 --port 8099
 ```
