@@ -52,6 +52,8 @@ def test_preferences_replan_and_cap(setup_client):
     c=setup_client
     r=c.patch('/api/settings',json={'training_volume_profile':'gradual','training_difficulty':'comfortable','baseline_weekly_km':68,'max_long_run_km':24,'max_long_run_share':.40})
     assert r.status_code==200
+    assert c.get('/api/week').json()['plan_stale'] is True
+    assert c.post('/api/plan/refresh?weeks=1').status_code==200
     w=c.get('/api/week').json()
     long=max(x['distance_km'] for x in w['workouts'] if x['workout_type']=='long')
     assert long<=24.0

@@ -11,7 +11,7 @@ from typing import Any
 
 from db import data_dir, db_conn, rows
 from health_import import import_apple_health
-from training import predict_all
+from training import predict_all, mark_plan_stale
 
 
 def _status_dir() -> Path:
@@ -213,6 +213,7 @@ def _process_job(job_id: int) -> None:
             report("Prognosen", 0.97, {"runs_added": result.get("runs_added", 0)})
             _snapshot(c, "apple_health_import")
             result["predictions"] = predict_all(c)
+            if result.get("runs_added",0):mark_plan_stale(c,"Neue Apple-Health-Läufe verfügbar")
         with db_conn() as c:
             c.execute(
                 "UPDATE import_jobs SET status='completed',phase='Fertig',progress=1,result_json=?,error_text=NULL,updated_at=CURRENT_TIMESTAMP,finished_at=CURRENT_TIMESTAMP,source_path=NULL WHERE id=?",

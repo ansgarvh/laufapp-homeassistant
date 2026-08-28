@@ -4,13 +4,13 @@ ROOT=Path(__file__).resolve().parents[1]
 
 def test_versions_and_assets():
     cfg=yaml.safe_load((ROOT/'laufapp/config.yaml').read_text())
-    assert cfg['version']=='0.1.6'
-    assert 'APP_VERSION = "0.1.6"' in (ROOT/'laufapp/app/db.py').read_text()
-    assert 'ARG BUILD_VERSION=0.1.6' in (ROOT/'laufapp/Dockerfile').read_text()
+    assert cfg['version']=='0.1.7'
+    assert 'APP_VERSION = "0.1.7"' in (ROOT/'laufapp/app/db.py').read_text()
+    assert 'ARG BUILD_VERSION=0.1.7' in (ROOT/'laufapp/Dockerfile').read_text()
     static=ROOT/'laufapp/app/static'
     for name in ['index.html','styles.css','app.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png']:assert (static/name).exists()
     m=json.loads((static/'manifest.webmanifest').read_text());assert m['display']=='standalone'
-    assert "const CACHE='laufapp-v0.1.6'" in (static/'sw.js').read_text()
+    assert "const CACHE='laufapp-v0.1.7'" in (static/'sw.js').read_text()
     subprocess.run(['node','--check',str(static/'app.js')],check=True)
 
 def test_ha_app_config():

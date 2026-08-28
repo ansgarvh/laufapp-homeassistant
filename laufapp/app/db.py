@@ -8,8 +8,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
-APP_VERSION = "0.1.6"
-CURRENT_SCHEMA_VERSION = 3
+APP_VERSION = "0.1.7"
+CURRENT_SCHEMA_VERSION = 4
 LEGACY_V012_SCHEMA_VERSION = 1
 
 
@@ -150,7 +150,7 @@ def _schema_sql_v2() -> str:
     CREATE INDEX IF NOT EXISTS idx_runs_started_at ON runs(started_at);
     CREATE TABLE IF NOT EXISTS health_metrics(id INTEGER PRIMARY KEY AUTOINCREMENT,external_id TEXT UNIQUE,metric_type TEXT NOT NULL,start_at TEXT NOT NULL,end_at TEXT,value REAL NOT NULL,unit TEXT NOT NULL DEFAULT '',source TEXT NOT NULL DEFAULT 'apple_health',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
     CREATE INDEX IF NOT EXISTS idx_health_metric_time ON health_metrics(metric_type,start_at);
-    CREATE TABLE IF NOT EXISTS workouts(id INTEGER PRIMARY KEY AUTOINCREMENT,week_start TEXT NOT NULL,origin_week_start TEXT NOT NULL,scheduled_date TEXT NOT NULL,workout_type TEXT NOT NULL,title TEXT NOT NULL,distance_km REAL NOT NULL,pace_low_s_per_km REAL,pace_high_s_per_km REAL,details_json TEXT NOT NULL DEFAULT '{}',status TEXT NOT NULL DEFAULT 'planned',linked_run_id INTEGER,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,FOREIGN KEY(linked_run_id) REFERENCES runs(id) ON DELETE SET NULL);
+    CREATE TABLE IF NOT EXISTS workouts(id INTEGER PRIMARY KEY AUTOINCREMENT,week_start TEXT NOT NULL,origin_week_start TEXT NOT NULL,scheduled_date TEXT NOT NULL,workout_type TEXT NOT NULL,title TEXT NOT NULL,distance_km REAL NOT NULL,pace_low_s_per_km REAL,pace_high_s_per_km REAL,details_json TEXT NOT NULL DEFAULT '{}',status TEXT NOT NULL DEFAULT 'planned',linked_run_id INTEGER,manual_override INTEGER NOT NULL DEFAULT 0,modified_by TEXT NOT NULL DEFAULT 'engine',generation_version TEXT,plan_generation_id TEXT,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,FOREIGN KEY(linked_run_id) REFERENCES runs(id) ON DELETE SET NULL);
     CREATE INDEX IF NOT EXISTS idx_workouts_week ON workouts(week_start);
     CREATE TABLE IF NOT EXISTS performance_marks(id INTEGER PRIMARY KEY AUTOINCREMENT,distance_km REAL NOT NULL,duration_s REAL NOT NULL,mark_date TEXT NOT NULL,source TEXT NOT NULL DEFAULT 'manual',label TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
     CREATE TABLE IF NOT EXISTS prediction_history(id INTEGER PRIMARY KEY AUTOINCREMENT,race_distance_km REAL NOT NULL,predicted_seconds REAL NOT NULL,low_seconds REAL NOT NULL,high_seconds REAL NOT NULL,confidence REAL NOT NULL,source TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
@@ -281,6 +281,13 @@ def _apply_migration_2_to_3(c: sqlite3.Connection) -> None:
         c.execute("ALTER TABLE import_jobs ADD COLUMN replace_existing INTEGER NOT NULL DEFAULT 0")
 
 
+def _apply_migration_3_to_4(c: sqlite3.Connection) -> None:
+    cols={r["name"] for r in c.execute("PRAGMA table_info(workouts)")}
+    additions=(("manual_override","INTEGER NOT NULL DEFAULT 0"),("modified_by","TEXT NOT NULL DEFAULT 'engine'"),("generation_version","TEXT"),("plan_generation_id","TEXT"))
+    for name,definition in additions:
+        if name not in cols:c.execute(f"ALTER TABLE workouts ADD COLUMN {name} {definition}")
+
+
 def _write_defaults_and_versions(c: sqlite3.Connection) -> None:
     for k, v in _defaults().items():
         c.execute(
@@ -346,6 +353,9 @@ def init_db(path: Path | None = None) -> dict[str, Any]:
             if from_version == 2:
                 _apply_migration_2_to_3(c)
                 from_version = 3
+            if from_version == 3:
+                _apply_migration_3_to_4(c)
+                from_version = 4
             if from_version != CURRENT_SCHEMA_VERSION:
                 raise RuntimeError(f"Kein Migrationspfad ab Schema {from_version}.")
             _write_defaults_and_versions(c)
@@ -365,6 +375,7 @@ def init_db(path: Path | None = None) -> dict[str, Any]:
             # Safe/idempotent schema repair. No destructive SQL.
             c.executescript(_schema_sql_v2())
             _apply_migration_2_to_3(c)
+            _apply_migration_3_to_4(c)
             _ensure_legacy_compat(c)
             _write_defaults_and_versions(c)
             c.execute(f"PRAGMA user_version={CURRENT_SCHEMA_VERSION}")

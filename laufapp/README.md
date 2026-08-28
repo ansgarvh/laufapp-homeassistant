@@ -1,6 +1,13 @@
-# Laufapp v0.1.6
+# Laufapp v0.1.7
 
 Private, mobile-first Lauf-PWA für Home Assistant OS auf dem Beelink Mini S12. Die App verbindet eine lokale Trainings-/Prognoseengine mit Apple-Health-Daten und einem optionalen OpenAI-Coach. Sie ist für genau einen Nutzer ausgelegt.
+
+## Highlights von v0.1.7
+
+- Deterministische adaptive Trainingsengine mit robuster Basis aus abgeschlossenen Wochen.
+- Explizite Planfrische und „Plan neu berechnen“ ohne Überschreiben manueller/absolvierter Einheiten.
+- Rennrelative Phasen, Recovery, Marathon-Long-Runs und Qualitätsperiodisierung; kompakte Planbasis.
+- Details: `TRAINING_ENGINE.md` im Repository.
 
 ## Highlights von v0.1.6
 

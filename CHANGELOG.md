@@ -1,5 +1,13 @@
 # Laufapp Changelog
 
+## v0.1.7 – 2026-08-28
+
+- Robuste etablierte Wochenlast aus acht abgeschlossenen Wochen; Teilwoche ist nur Kontext, echter Rückgang wird separat erkannt.
+- Rennrelative Build/Specific/Peak/Taper/Race-Phasen, blockbasierte Recovery und periodisierte Qualität/Marathon-Long-Runs.
+- Explizite Planfrische und transaktionale Neuberechnung mit Diff; kein stilles Überschreiben nach Health-Import.
+- Schema 4 schützt manuell verschobene/getauschte, Coach-geänderte, vergangene, verknüpfte und absolvierte Einheiten.
+- Planbasis und Long-Run-Begründung machen die lokale, LLM-unabhängige Verschreibung nachvollziehbar.
+
 ## v0.1.6 – 2026-08-28
 
 - Apple-Health-Diagnose trennt erwartete Ausschlüsse außerhalb des 24-Monats-Zeitraums von ungültigen Workouts und zeigt erkannte, vorhandene und neue Health-Metriken verständlich an.
