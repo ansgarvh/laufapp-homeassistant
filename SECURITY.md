@@ -1,4 +1,4 @@
-# Sicherheitskonzept – Laufapp v0.1.3
+# Sicherheitskonzept – Laufapp v0.1.4
 
 ## Lokale Datenhaltung
 
@@ -51,4 +51,4 @@ Der Port 8099 wird standardmäßig nicht auf dem Home-Assistant-Host veröffentl
 
 ## Testgrenze
 
-Python/JavaScript, Datenbankmigration, Rollback, Importjobs, Health-Parser, Transferpfad und vollständiger synthetischer Workflow wurden isoliert getestet. Ein echter Docker-/Supervisor-Build von v0.1.3 ist in dieser Entwicklungsumgebung mangels Docker-Daemon nicht möglich und muss beim Update auf dem realen Home-Assistant-OS-Beelink verifiziert werden. Echte OpenAI-Aufrufe mit dem persönlichen API-Key müssen ebenfalls im Zielsystem verifiziert werden.
+Python/JavaScript, Datenbankmigration, Rollback, Importjobs, Health-Parser, Transferpfad und vollständiger synthetischer Workflow werden isoliert getestet. Diese statischen und synthetischen Prüfungen sind ausdrücklich keine echten Home-Assistant-Integrationstests. Docker-/Supervisor-Build, großer Upload über echten Home-Assistant-Ingress und echte OpenAI-Aufrufe mit dem persönlichen API-Key müssen im Release-Prozess beziehungsweise Zielsystem separat verifiziert werden.
