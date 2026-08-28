@@ -54,7 +54,7 @@ def test_v012_database_migrates_with_backup_and_keeps_user_data(tmp_path, monkey
         assert c.execute("SELECT COUNT(*) FROM performance_marks").fetchone()[0]==1
         tables={r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
         assert {'import_jobs','run_samples','gps_points','migration_log'} <= tables
-        assert json.loads(c.execute("SELECT value FROM settings WHERE key='app_version'").fetchone()['value'])=='0.1.8'
+        assert json.loads(c.execute("SELECT value FROM settings WHERE key='app_version'").fetchone()['value'])=='0.1.9'
     # An ordinary second startup is idempotent and does not create another migration backup.
     before=set((dbfile.parent/'backups').glob('*.sqlite3'));second=db.init_db(dbfile);after=set((dbfile.parent/'backups').glob('*.sqlite3'))
     assert second['backup_path'] is None and before==after

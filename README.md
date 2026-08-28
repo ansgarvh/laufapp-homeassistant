@@ -1,7 +1,15 @@
-# Laufapp v0.1.8
+# Laufapp v0.1.9
 
 Private, mobile-first Lauf-PWA für Home Assistant OS auf dem Beelink Mini S12. Die App verbindet eine lokale Trainings-/Prognoseengine mit Apple-Health-Daten und einem optionalen OpenAI-Coach. Sie ist für genau einen Nutzer ausgelegt.
 
+## Highlights von v0.1.9
+
+- **Plan neu berechnen** funktioniert aus Einstellungen auch dann, wenn die Wochenansicht vorher noch nicht geöffnet wurde; ein fehlender Wochenstart wird sauber als aktuelle Kalenderwoche behandelt.
+- Die Planneuberechnung erzeugt keine neue automatische Einheit auf einem Tag, an dem bereits eine absolvierte, verknüpfte oder manuell geschützte Einheit liegt. Von v0.1.8 erzeugte, eindeutig überflüssige Engine-Dubletten auf solchen Tagen werden beim Laden/Neuberechnen der Woche konservativ entfernt.
+- Der automatisch neu erzeugte Restplan berücksichtigt den bereits geschützten Wochenumfang. Nutzergrenzen für Wochenkilometer und Longrun bleiben damit echte Obergrenzen für automatisch erzeugte Einheiten, ohne absolvierte/manuelle Einheiten umzuschreiben.
+- **Fortschritt:** Wochenbeschriftungen stehen wieder unter den Balken statt über dem Diagramm.
+- **Woche:** der Drag-Griff bleibt bewusst nur an geplanten, verschiebbaren Einheiten sichtbar; nicht verschiebbare/absolvierte Zeilen bleiben nun trotzdem exakt gleich ausgerichtet.
+- Keine Datenbankschemaänderung; bestehende persistente Daten bleiben erhalten.
 
 ## Highlights von v0.1.8
 
@@ -56,8 +64,8 @@ Zeiträume sind rollierende Kalendermonate bis heute; die angebrochene aktuelle 
 ## Bestehende Funktionen
 
 - **Heute:** aktiver Wettkampf, Zielzeit, Prognose, Zielbewertung, nächste Einheit, Recovery-Signale und offene Coach-Vorschläge.
-- **Woche:** vier Trainingseinheiten, Status, Wochenkilometer, RPE + Pace, Verschieben auch in angrenzende Wochen, Planqualitäts- und Longrun-Guardrails.
-- **Trainingssteuerung:** Umfang Behutsam/Ausgewogen/Progressiv, Schwierigkeit Komfortabel/Ausgewogen/Anspruchsvoll, maximale Longrun-Distanz und maximaler Longrun-Anteil.
+- **Woche:** 3–7 geplante Trainingseinheiten gemäß Einstellungen, Status, Wochenkilometer, RPE + Pace, Verschieben auch in angrenzende Wochen, Planqualitäts- und Longrun-Guardrails.
+- **Trainingssteuerung:** konfigurierbare Lauftage, Qualitätseinheiten, automatische/manuelle Wochenobergrenze, maximale Longrun-Distanz sowie bestehende Guardrails.
 - **Fortschritt:** Prognosen für 5 km, 10 km, Halbmarathon und Marathon mit Unsicherheitsbereich, Wochenkilometer und Leistungsprofil.
 - **Apple Health:** exakt 24 Kalendermonate; Läufe, Ruhepuls, HRV, Schlaf, Gewicht und VO₂max; wiederholte Exporte werden dedupliziert.
 - **Schuhe:** Stammdaten, Startkilometer und Gesamtlaufstrecke je Schuh.
@@ -88,22 +96,11 @@ Der API-Key verbleibt serverseitig in der Home-Assistant-App-Konfiguration (`/da
 
 Standardmodelle: `gpt-5.6-terra` für den Coach und `gpt-5.6-luna` für Screenshot-Extraktion. Wissenschaftliche Websuche ist optional.
 
-## Teststatus v0.1.4
+## Teststatus
 
-Vor der Paketierung wurden unter anderem ausgeführt:
+Die automatisierte GitHub-CI prüft Python-Compilecheck, JavaScript-Syntax, vollständige Pytest-Regression sowie den Home-Assistant-Docker-Build. Zusätzlich enthält die Testsuite synthetische End-to-End-, Migrations-, Ingress-, Health-Import-, Trainingsplan- und UI-Regressionsprüfungen.
 
-- Python-Compilecheck für Backend und Tests.
-- JavaScript-Syntaxcheck mit Node.
-- **31 automatisierte Regressionstests** inklusive vollständigem synthetischem End-to-End-Workflow und statischer Prüfung des Ingress-Streamings.
-- Upgrade-Test einer gefüllten v0.1.2-Datenbank auf v0.1.3 mit Datenerhalt und Vorab-Backup.
-- Fehler-Injektion in die Migration mit Wiederherstellung des exakten Vorzustands.
-- Test des Einmal-Transfers local → GitHub sowie Schutz vor Überschreiben einer bereits vorhandenen Repository-Datenbank.
-- Hintergrundimport, Rollback bei defektem Export und Wiederaufnahme eines unterbrochenen Verarbeitungsjobs.
-- Detaildaten-Test für Herzfrequenz, Speed, Power, Schrittlänge, vertikale Oszillation, Bodenkontaktzeit, Kadenz und GPX.
-- Belastungstest mit einer ca. 100-MB-ZIP und rund 699.000 Health-Records.
-- Responsive Renderprüfung der neuen Import-/GitHub-Oberfläche bei 390 px und 320 px ohne horizontalen Overflow.
-
-Compile-, Regressions- und synthetische End-to-End-Tests laufen isoliert und ersetzen keinen Integrationstest auf einer realen Home-Assistant-Installation. Der Docker-Build sowie ein großer Upload über echten Home-Assistant-Ingress müssen deshalb im jeweiligen Release-Prozess separat verifiziert werden. Echte OpenAI-Netzwerkaufrufe mit dem persönlichen API-Key sind ebenfalls nicht Teil der isolierten Tests.
+Statisch/isoliert getestet; Home-Assistant-Integration muss lokal auf dem Beelink verifiziert werden. Reale iPhone-/Nabu-Casa-Interaktionen sind nicht Bestandteil der isolierten CI.
 
 ## Lokale Entwicklung
 
