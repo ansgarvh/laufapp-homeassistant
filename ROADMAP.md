@@ -1,5 +1,9 @@
 # Roadmap
 
+## Erledigt in v0.1.8
+- Dedizierte Einstellungen, kombinierte Planungsgrenzen und zentrale Neuberechnung.
+- Korrekte Ein-Wochen-Differenz und direkte Navigation zur aktuellen Woche.
+
 ## Erledigt in v0.1.7
 - Robuste Umfangsbasis ohne Verzerrung durch die laufende Teilwoche.
 - Blockrelative Recovery, Marathon-Long-Run- und Qualitätsperiodisierung.

@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
-APP_VERSION = "0.1.7"
+APP_VERSION = "0.1.8"
 CURRENT_SCHEMA_VERSION = 4
 LEGACY_V012_SCHEMA_VERSION = 1
 
@@ -227,8 +227,10 @@ def _defaults() -> dict[str, Any]:
         "training_days": [1, 3, 4, 6],
         "training_volume_profile": "steady",
         "training_difficulty": "balanced",
+        "quality_sessions_per_week": 2,
+        "max_weekly_km_mode": "auto",
         "baseline_weekly_km": 40.0,
-        "max_long_run_km": 32.0,
+        "max_long_run_km": 35.0,
         "max_long_run_share": 0.45,
         "monthly_ai_budget_eur": 10.0,
         "coach_model": "gpt-5.6-terra",

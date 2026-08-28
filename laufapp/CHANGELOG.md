@@ -1,5 +1,14 @@
 # Laufapp Changelog
 
+## v0.1.8 – 2026-08-28
+
+- Dedizierte mobile Einstellungen-Navigation mit persistenten, serverseitig validierten Planungslimits.
+- Deterministische Engine unterstützt 3–7 Lauftage, 1–3 Qualitätseinheiten, automatische/manuelle Wochenobergrenze und distanzabhängige Longrun-Obergrenzen (Marathon: 35 km). Intensive Longruns verbrauchen dabei ein Qualitätsbudget.
+- Planneuberechnung aus Woche entfernt und nach Einstellungen verschoben; stale Hinweis verlinkt dorthin.
+- Produktionsfehler behoben: „Wochenumfang“, Longrun und Qualität vergleichen jetzt dieselbe einzelne Startwoche; zuvor wurden alle Wochen des Refresh-Fensters addiert.
+- „Aktuelle Woche“ ergänzt; bestehender Request-Zähler schützt weiterhin vor verspäteten Wochenantworten.
+- Additive Settings-Schlüssel benötigen keine Tabellenschema-Migration und bewahren bestehende Werte.
+
 ## v0.1.7 – 2026-08-28
 
 - Robuste etablierte Wochenlast aus acht abgeschlossenen Wochen; Teilwoche ist nur Kontext, echter Rückgang wird separat erkannt.
