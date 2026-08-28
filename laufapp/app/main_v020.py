@@ -7,12 +7,18 @@ from fastapi import HTTPException, Query
 from pydantic import BaseModel, Field
 
 import coach as coach_module
+import db as db_module
 import main as legacy
 import training as legacy_training
 import training_v020 as training
 from db import db_conn, get_setting, set_setting
 
 APP_VERSION = "0.2.0"
+
+# db._defaults()/init_db resolve this module global at runtime. Keep the
+# persistent app_version marker aligned with the Home Assistant release even
+# though v0.2 deliberately reuses the unchanged schema-4 database module.
+db_module.APP_VERSION = APP_VERSION
 
 # Keep the mature v0.1.9 API surface and security middleware, but replace the
 # planner globals used by its endpoint functions. Python resolves these globals
