@@ -167,10 +167,14 @@ def api_plan(start:date|None=Query(default=None),force:bool=False):
         if not current_race(c):raise HTTPException(400,'Lege zuerst einen aktiven Wettkampf an.')
         return {'workouts':generate_week(c,week_start_for(start or date.today()),force)}
 @app.post('/api/plan/refresh')
-def api_plan_refresh(start:date|None=Query(default=None),weeks:int=Query(default=4,ge=1,le=12)):
+def api_plan_refresh(start:str|None=Query(default=None),weeks:int=Query(default=4,ge=1,le=12)):
+    parsed_start=None
+    if start and start.lower() not in {'null','undefined'}:
+        try:parsed_start=date.fromisoformat(start)
+        except ValueError as e:raise HTTPException(400,'Ungültiges Startdatum für die Planneuberechnung.') from e
     with db_conn() as c:
         if not current_race(c):raise HTTPException(400,'Lege zuerst einen aktiven Wettkampf an.')
-        return refresh_plan(c,start,weeks)
+        return refresh_plan(c,parsed_start,weeks)
 
 @app.get('/api/plan/review')
 def api_review_get(start:date|None=Query(default=None)):
