@@ -28,11 +28,15 @@ def test_shoe_mileage_and_run_match(setup_client):
     ww=c.get('/api/week').json()['workouts']
     assert next(x for x in ww if x['id']==w['id'])['status']=='completed'
 
-def test_move_collision_and_adjacent_warning(setup_client):
+def test_move_swap_and_adjacent_warning(setup_client):
     c=setup_client; workouts=c.get('/api/week').json()['workouts']
     first,second=workouts[0],workouts[1]
     coll=c.post(f"/api/workouts/{first['id']}/move",json={'scheduled_date':second['scheduled_date']})
-    assert coll.status_code==400
+    assert coll.status_code==200 and coll.json()['operation']=='swap'
+    swapped=c.get('/api/week').json()['workouts']
+    assert next(x for x in swapped if x['id']==first['id'])['scheduled_date']==second['scheduled_date']
+    assert next(x for x in swapped if x['id']==second['id'])['scheduled_date']==first['scheduled_date']
+    workouts=swapped
     # move quality next to long run when possible -> warning is allowed/expected for hard pair
     quality=next(x for x in workouts if x['workout_type']=='quality'); long=next(x for x in workouts if x['workout_type']=='long')
     proposed=(date.fromisoformat(long['scheduled_date'])-timedelta(days=1)).isoformat()

@@ -1,5 +1,5 @@
 from __future__ import annotations
-import json, os, tempfile, uuid
+import calendar, json, os, tempfile, uuid
 from contextlib import asynccontextmanager
 from datetime import date, timedelta
 from pathlib import Path
@@ -99,6 +99,23 @@ def health_summary(c):
         if rr:
             vals=[float(r['value']) for r in rr];out[metric]={'latest':round(vals[0],2),'average':round(sum(vals)/len(vals),2),'unit':rr[0]['unit'],'samples':len(vals)}
     return out
+
+def progress_volume(c, period:str):
+    months={'1m':1,'3m':3,'6m':6,'12m':12}[period]
+    today=date.today(); raw=today.year*12+today.month-1-months; year,month0=divmod(raw,12)
+    cutoff=date(year,month0+1,min(today.day,calendar.monthrange(year,month0+1)[1]))
+    first=week_start_for(cutoff); last=week_start_for(today)
+    buckets={}
+    for r in c.execute("SELECT started_at,distance_km FROM runs WHERE substr(started_at,1,10)>=? AND substr(started_at,1,10)<=? ORDER BY started_at",(cutoff.isoformat(),today.isoformat())):
+        try: ws=week_start_for(parse_dt(r['started_at']).date()).isoformat()
+        except Exception: continue
+        b=buckets.setdefault(ws,{'distance_km':0.0,'run_count':0});b['distance_km']+=float(r['distance_km']);b['run_count']+=1
+    weeks=[]; cursor=first
+    while cursor<=last:
+        b=buckets.get(cursor.isoformat(),{'distance_km':0.0,'run_count':0})
+        weeks.append({'week_start':cursor.isoformat(),'distance_km':round(b['distance_km'],2),'run_count':b['run_count']});cursor+=timedelta(days=7)
+    total=round(sum(x['distance_km'] for x in weeks),2)
+    return {'period':period,'cutoff_date':cutoff.isoformat(),'through_date':today.isoformat(),'weeks':weeks,'total_km':total,'average_weekly_km':round(total/len(weeks),2) if weeks else 0,'maximum_weekly_km':max((x['distance_km'] for x in weeks),default=0),'number_of_weeks':len(weeks),'active_weeks':sum(x['run_count']>0 for x in weeks)}
 def shoe_rows(c):
     return rows(c.execute("SELECT s.id,s.brand,s.model,s.nickname,s.start_km,s.archived,s.created_at,ROUND(s.start_km+COALESCE(SUM(r.distance_km),0),1) total_km,COUNT(r.id) run_count,MAX(r.started_at) last_run FROM shoes s LEFT JOIN runs r ON r.shoe_id=s.id GROUP BY s.id ORDER BY s.archived,s.created_at DESC").fetchall())
 def settings_dict(c):return {'training_days':get_setting(c,'training_days',[1,3,4,6]),'training_volume_profile':get_setting(c,'training_volume_profile','steady'),'training_difficulty':get_setting(c,'training_difficulty','balanced'),'baseline_weekly_km':get_setting(c,'baseline_weekly_km',40.0),'max_long_run_km':get_setting(c,'max_long_run_km',32.0),'max_long_run_share':get_setting(c,'max_long_run_share',.45),'monthly_ai_budget_eur':get_setting(c,'monthly_ai_budget_eur',10.0),'coach_model':get_setting(c,'coach_model','gpt-5.6-terra'),'vision_model':get_setting(c,'vision_model','gpt-5.6-luna'),'evidence_search':get_setting(c,'evidence_search',True),'ai':config_status(c)}
@@ -128,6 +145,9 @@ def api_dashboard():
 @app.get('/api/week')
 def api_week(start:date|None=Query(default=None)):
     with db_conn() as c:return week_summary(c,week_start_for(start or date.today()))
+@app.get('/api/progress/volume')
+def api_progress_volume(period:Literal['1m','3m','6m','12m']='3m'):
+    with db_conn() as c:return progress_volume(c,period)
 @app.post('/api/plan/generate')
 def api_plan(start:date|None=Query(default=None),force:bool=False):
     with db_conn() as c:
