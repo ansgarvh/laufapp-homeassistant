@@ -559,6 +559,9 @@ def import_apple_health(
             z.close()
     if progress:
         progress("Import abgeschlossen", 0.95, {"runs_added": runs, "metrics_added": metrics})
+    outside_period = rejected.get("before_cutoff", 0)
+    invalid_reasons = {k: v for k, v in rejected.items() if k != "before_cutoff"}
+    invalid_total = sum(invalid_reasons.values())
     rejected_total = sum(rejected.values())
     classification = "success"
     useful_runs = runs or merged or existing
@@ -572,6 +575,11 @@ def import_apple_health(
         "runs_already_existing": existing,
         "running_workouts_rejected": rejected_total,
         "rejection_reasons": rejected,
+        "running_workouts_seen_total": running_seen,
+        "running_workouts_in_period": running_seen - outside_period,
+        "running_workouts_outside_period": outside_period,
+        "running_workouts_invalid": invalid_total,
+        "invalid_rejection_reasons": invalid_reasons,
         "metrics_added": metrics,
         "run_samples_added": samples_added,
         "gps_points_added": gps_points_added,
@@ -585,6 +593,7 @@ def import_apple_health(
         "metric_records_seen": metric_seen,
         "metric_records_added": metric_added,
         "sleep_intervals_seen": sum(len(v) for v in nights.values()),
+        "sleep_nights_seen": len(nights),
         "sleep_nights_added": metrics - sum(metric_added.values()),
         "samples_staged": samples_staged,
         "samples_staged_by_type": sample_staged_by_type,

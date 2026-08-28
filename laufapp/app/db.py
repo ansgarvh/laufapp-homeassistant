@@ -8,8 +8,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
-APP_VERSION = "0.1.5"
-CURRENT_SCHEMA_VERSION = 2
+APP_VERSION = "0.1.6"
+CURRENT_SCHEMA_VERSION = 3
 LEGACY_V012_SCHEMA_VERSION = 1
 
 
@@ -174,7 +174,8 @@ def _schema_sql_v2() -> str:
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       started_at TEXT,
-      finished_at TEXT
+      finished_at TEXT,
+      replace_existing INTEGER NOT NULL DEFAULT 0
     );
     CREATE INDEX IF NOT EXISTS idx_import_jobs_created ON import_jobs(created_at DESC);
 
@@ -275,6 +276,11 @@ def _apply_migration_1_to_2(c: sqlite3.Connection) -> None:
     c.executescript(_schema_sql_v2())
 
 
+def _apply_migration_2_to_3(c: sqlite3.Connection) -> None:
+    if "replace_existing" not in {r["name"] for r in c.execute("PRAGMA table_info(import_jobs)")}:
+        c.execute("ALTER TABLE import_jobs ADD COLUMN replace_existing INTEGER NOT NULL DEFAULT 0")
+
+
 def _write_defaults_and_versions(c: sqlite3.Connection) -> None:
     for k, v in _defaults().items():
         c.execute(
@@ -333,11 +339,14 @@ def init_db(path: Path | None = None) -> dict[str, Any]:
                 c, from_version, CURRENT_SCHEMA_VERSION
             )
             c.execute("BEGIN IMMEDIATE")
+            migrated_from = from_version
             if from_version == 1:
                 _apply_migration_1_to_2(c)
-                migrated_from = 1
                 from_version = 2
-            else:
+            if from_version == 2:
+                _apply_migration_2_to_3(c)
+                from_version = 3
+            if from_version != CURRENT_SCHEMA_VERSION:
                 raise RuntimeError(f"Kein Migrationspfad ab Schema {from_version}.")
             _write_defaults_and_versions(c)
             c.execute(f"PRAGMA user_version={CURRENT_SCHEMA_VERSION}")
@@ -355,6 +364,7 @@ def init_db(path: Path | None = None) -> dict[str, Any]:
         else:
             # Safe/idempotent schema repair. No destructive SQL.
             c.executescript(_schema_sql_v2())
+            _apply_migration_2_to_3(c)
             _ensure_legacy_compat(c)
             _write_defaults_and_versions(c)
             c.execute(f"PRAGMA user_version={CURRENT_SCHEMA_VERSION}")

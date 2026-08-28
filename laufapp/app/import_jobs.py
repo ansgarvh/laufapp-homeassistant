@@ -75,12 +75,12 @@ def create_import_job(original_name: str, source_path: Path, file_size: int) -> 
     return payload
 
 
-def create_import_job_with_uuid(job_uuid: str, original_name: str, source_path: Path, file_size: int) -> dict[str, Any]:
+def create_import_job_with_uuid(job_uuid: str, original_name: str, source_path: Path, file_size: int, replace_existing: bool = False) -> dict[str, Any]:
     with db_conn() as c:
         cur = c.execute(
-            "INSERT INTO import_jobs(job_uuid,import_type,original_name,source_path,file_size,status,phase,progress) "
-            "VALUES(?,?,?,?,?,'queued','Upload abgeschlossen',1)",
-            (job_uuid, "apple_health", original_name, str(source_path), file_size),
+            "INSERT INTO import_jobs(job_uuid,import_type,original_name,source_path,file_size,status,phase,progress,replace_existing) "
+            "VALUES(?,?,?,?,?,'queued','Upload abgeschlossen',1,?)",
+            (job_uuid, "apple_health", original_name, str(source_path), file_size, int(replace_existing)),
         )
         job_id = int(cur.lastrowid)
     payload = {
@@ -89,6 +89,7 @@ def create_import_job_with_uuid(job_uuid: str, original_name: str, source_path: 
         "status": "queued",
         "phase": "Upload abgeschlossen",
         "progress": 1.0,
+        "replace_existing": replace_existing,
     }
     _write_live_status(job_uuid, payload)
     return payload
@@ -182,7 +183,33 @@ def _process_job(job_id: int) -> None:
         # written to a small status file so it remains visible without committing
         # partial health records.
         with db_conn() as c:
+            replace_existing = bool(row["replace_existing"])
+            preserved = []
+            if replace_existing:
+                preserved = [dict(r) for r in c.execute(
+                    "SELECT r.id,r.external_id,r.rpe,r.shoe_id,r.notes,"
+                    "(SELECT group_concat(id) FROM workouts WHERE linked_run_id=r.id) linked_workouts "
+                    "FROM runs r WHERE r.source='apple_health' AND r.external_id IS NOT NULL"
+                )]
+                # Apple samples/routes may be attached to a conservatively
+                # enriched manual run, so clear them by provenance as well.
+                c.execute("DELETE FROM run_samples WHERE source='apple_health'")
+                c.execute("DELETE FROM gps_points WHERE source='apple_health'")
+                c.execute("DELETE FROM health_metrics WHERE source='apple_health'")
+                c.execute("DELETE FROM runs WHERE source='apple_health'")
+                c.execute("DELETE FROM prediction_history WHERE source='apple_health_import'")
             result = import_apple_health(c, source_path, 24, progress=report)
+            if replace_existing:
+                for old in preserved:
+                    c.execute(
+                        "UPDATE runs SET rpe=?,shoe_id=?,notes=? WHERE external_id=?",
+                        (old["rpe"], old["shoe_id"], old["notes"], old["external_id"]),
+                    )
+                    replacement = c.execute("SELECT id FROM runs WHERE external_id=?", (old["external_id"],)).fetchone()
+                    if replacement and old["linked_workouts"]:
+                        ids = [int(x) for x in old["linked_workouts"].split(",")]
+                        c.executemany("UPDATE workouts SET linked_run_id=? WHERE id=?", ((replacement["id"], wid) for wid in ids))
+            result["import_mode"] = "replace" if replace_existing else "deduplicate"
             report("Prognosen", 0.97, {"runs_added": result.get("runs_added", 0)})
             _snapshot(c, "apple_health_import")
             result["predictions"] = predict_all(c)

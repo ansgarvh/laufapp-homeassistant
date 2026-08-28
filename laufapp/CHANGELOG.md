@@ -1,5 +1,16 @@
 # Laufapp Changelog
 
+## v0.1.6 – 2026-08-28
+
+- Apple-Health-Diagnose trennt erwartete Ausschlüsse außerhalb des 24-Monats-Zeitraums von ungültigen Workouts und zeigt erkannte, vorhandene und neue Health-Metriken verständlich an.
+- Der bestehende Uploadbereich akzeptiert ZIP und `export.xml` nun auch per Drag & Drop; Dateiauswahl und Drop verwenden dieselbe Ingress-Streaming-/Job-Pipeline.
+- Optionaler, einmal bestätigter Ersatzmodus tauscht ausschließlich Apple-Health-Daten in einer Transaktion aus. Fehler rollen vollständig zurück; RPE, Notizen, Schuh und eindeutige Workout-Verknüpfungen werden anhand stabiler Apple-IDs wiederhergestellt.
+- Workout-Drag & Drop erkennt nun neben der kompakten Tagesleiste auch die tatsächlich übereinander abgelegten Workout-Karten als Drop-Ziele; Backend-Move/-Swap bleibt atomar und schützt abgeschlossene/ausgefallene Einheiten.
+- Wochenkilometer-Balken sind per Klick/Tap auswählbar und zeigen Zeitraum sowie Kilometer in einem dezent rot akzentuierten Overlay.
+- Fortschritt ergänzt die kalendergenauen Zeiträume „Dieses Jahr“ und „Letztes Jahr“; grenzüberschreitende ISO-Wochen enthalten ausschließlich Läufe des gewählten Kalenderjahres. Lange Zeiträume beschriften die weiterhin wöchentlichen Balken sparsamer.
+- Additive Schema-3-Migration speichert den Ersatzmodus eines Hintergrundjobs restartfest und erstellt vorher das bestehende integrity-geprüfte Backup.
+- Statisch/isoliert getestet; Home-Assistant-Integration muss auf dem Beelink verifiziert werden.
+
 ## v0.1.5 – 2026-08-28
 
 - Apple-Health-Workouts werden zusätzlich aus nativen `WorkoutStatistics` (Distanz, Dauer, Energie) gelesen; Endzeit dient konservativ als Dauer-Fallback.

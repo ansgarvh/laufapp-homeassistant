@@ -40,13 +40,13 @@ def test_v012_database_migrates_with_backup_and_keeps_user_data(tmp_path, monkey
     import db
     monkeypatch.setenv('LAUFAPP_DATA_DIR',str(dbfile.parent))
     result=db.init_db(dbfile)
-    assert result['from_version']==1 and result['to_version']==2
+    assert result['from_version']==1 and result['to_version']==3
     backup=Path(result['backup_path']);assert backup.is_file()
     with sqlite3.connect(backup) as bc:
         assert bc.execute("SELECT COUNT(*) FROM runs").fetchone()[0]==1
         assert bc.execute("PRAGMA integrity_check").fetchone()[0]=='ok'
     with db.db_conn(dbfile) as c:
-        assert c.execute('PRAGMA user_version').fetchone()[0]==2
+        assert c.execute('PRAGMA user_version').fetchone()[0]==3
         assert c.execute("SELECT COUNT(*) FROM runs WHERE external_id='legacy-run'").fetchone()[0]==1
         run=c.execute("SELECT * FROM runs WHERE external_id='legacy-run'").fetchone()
         assert run['rpe']==4 and run['notes']=='keep me' and run['shoe_id']==sid
@@ -54,7 +54,7 @@ def test_v012_database_migrates_with_backup_and_keeps_user_data(tmp_path, monkey
         assert c.execute("SELECT COUNT(*) FROM performance_marks").fetchone()[0]==1
         tables={r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
         assert {'import_jobs','run_samples','gps_points','migration_log'} <= tables
-        assert json.loads(c.execute("SELECT value FROM settings WHERE key='app_version'").fetchone()['value'])=='0.1.5'
+        assert json.loads(c.execute("SELECT value FROM settings WHERE key='app_version'").fetchone()['value'])=='0.1.6'
     # An ordinary second startup is idempotent and does not create another migration backup.
     before=set((dbfile.parent/'backups').glob('*.sqlite3'));second=db.init_db(dbfile);after=set((dbfile.parent/'backups').glob('*.sqlite3'))
     assert second['backup_path'] is None and before==after
