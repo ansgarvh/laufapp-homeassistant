@@ -23,7 +23,9 @@ def test_multiple_a_races_switch_focus_after_first(tmp_path):
         first,d1=_race(c,'Frühjahrs-A',35,'A')
         second,_=_race(c,'Herbst-A',140,'A')
         assert int(tv.current_race(c)['id'])==first
-        ws_after_first=tv.base.week_start_for(d1+timedelta(days=2))
+        # The first A-race owns its entire race week. The following Monday starts
+        # the next block and therefore hands focus to the next A-race.
+        ws_after_first=tv.base.week_start_for(d1)+timedelta(days=7)
         assert int(tv.race_for_week(c,ws_after_first)['id'])==second
     finally:c.close()
 
