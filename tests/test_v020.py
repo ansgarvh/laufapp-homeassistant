@@ -78,6 +78,37 @@ def test_race_api_supports_a_b_and_recommendation(setup_client):
     assert 'available' in rec.json()
 
 
+def test_b_race_api_does_not_recalculate_preceding_weeks(setup_client):
+    client=setup_client
+    current=client.get('/api/week').json()
+    before=[(w['id'],w['scheduled_date'],w['title'],w['distance_km']) for w in current['workouts']]
+    assert client.get('/api/settings').json()['plan_stale'] is False
+
+    b_ws=tv.base.week_start_for(date.today()+timedelta(days=35))
+    b_date=b_ws+timedelta(days=6)
+    created=client.post('/api/v2/races',json={'name':'Lokales B-Rennen','distance_km':10,'race_date':b_date.isoformat(),'goal_seconds':2700,'priority':'B'})
+    assert created.status_code==201,created.text
+
+    # B-race changes are deliberately local: no global stale state and no change
+    # to the already generated current week.
+    assert client.get('/api/settings').json()['plan_stale'] is False
+    after_week=client.get('/api/week').json()
+    after=[(w['id'],w['scheduled_date'],w['title'],w['distance_km']) for w in after_week['workouts']]
+    assert after==before
+
+    race_week=client.get(f"/api/week?start={b_ws.isoformat()}").json()
+    b_workouts=[w for w in race_week['workouts'] if w['workout_type']=='race' and w['details'].get('race_priority')=='B']
+    assert len(b_workouts)==1
+    assert b_workouts[0]['scheduled_date']==b_date.isoformat()
+    assert not [w for w in race_week['workouts'] if w['workout_type']=='long']
+
+    # Removing the B-race restores that week without touching earlier weeks.
+    deleted=client.delete(f"/api/v2/races/{created.json()['id']}");assert deleted.status_code==200
+    restored=client.get(f"/api/week?start={b_ws.isoformat()}").json()
+    assert len([w for w in restored['workouts'] if w['workout_type']=='long'])==1
+    assert not [w for w in restored['workouts'] if w['details'].get('race_priority')=='B']
+
+
 def test_completed_workout_can_assign_shoe_and_increase_shoe_km(setup_client):
     client=setup_client
     shoe=client.post('/api/shoes',json={'brand':'Test','model':'Trainer','nickname':'Daily','start_km':5}).json()['id']
@@ -89,3 +120,40 @@ def test_completed_workout_can_assign_shoe_and_increase_shoe_km(setup_client):
     assigned=client.patch(f"/api/v2/workouts/{w['id']}/shoe",json={'shoe_id':shoe});assert assigned.status_code==200,assigned.text
     shoes=client.get('/api/shoes').json();row=next(x for x in shoes if x['id']==shoe)
     assert row['total_km']>=5+float(w['distance_km'])-.05
+
+
+def test_v020_synthetic_end_to_end(setup_client):
+    """Full v0.2 user flow across races, plan generation, run and shoe data."""
+    client=setup_client
+    # Add a second A-race and a B-race between both A targets.
+    a2_date=(date.today()+timedelta(days=154)).isoformat()
+    a2=client.post('/api/v2/races',json={'name':'Zweites A-Rennen','distance_km':42.195,'race_date':a2_date,'goal_seconds':11800,'priority':'A'})
+    assert a2.status_code==201,a2.text
+    assert client.get('/api/settings').json()['plan_stale'] is True
+
+    # Recalculate current future plan explicitly; user-owned rows remain protected
+    # by the underlying v0.1.9 refresh architecture.
+    refreshed=client.post('/api/plan/refresh?weeks=4')
+    assert refreshed.status_code==200,refreshed.text
+    assert client.get('/api/settings').json()['plan_stale'] is False
+
+    b_ws=tv.base.week_start_for(date.today()+timedelta(days=42))
+    b_date=b_ws+timedelta(days=6)
+    b=client.post('/api/v2/races',json={'name':'10-km-B-Rennen','distance_km':10,'race_date':b_date.isoformat(),'goal_seconds':2650,'priority':'B'})
+    assert b.status_code==201,b.text
+    bweek=client.get(f"/api/week?start={b_ws.isoformat()}").json()
+    assert any(w['workout_type']=='race' and w['details'].get('race_priority')=='B' for w in bweek['workouts'])
+
+    # Complete a current planned workout with a real run, then account those
+    # kilometers to a shoe through the new completed-workout action.
+    shoe=client.post('/api/shoes',json={'brand':'ASICS','model':'Synthetic','nickname':'E2E','start_km':0}).json()['id']
+    week=client.get('/api/week').json();workout=next(w for w in week['workouts'] if w['status']=='planned')
+    inserted=client.post('/api/runs',json={'started_at':f"{workout['scheduled_date']}T07:30:00+02:00",'distance_km':workout['distance_km'],'duration_s':3300,'source':'manual'})
+    assert inserted.status_code==200,inserted.text
+    assigned=client.patch(f"/api/v2/workouts/{workout['id']}/shoe",json={'shoe_id':shoe})
+    assert assigned.status_code==200,assigned.text
+    shoe_row=next(s for s in client.get('/api/shoes').json() if s['id']==shoe)
+    assert shoe_row['run_count']==1 and shoe_row['total_km']>=float(workout['distance_km'])-.05
+
+    # API health exposes the release version through the actual v0.2 entrypoint.
+    assert client.get('/api/health').json()=={'ok':True,'version':'0.2.0'}
