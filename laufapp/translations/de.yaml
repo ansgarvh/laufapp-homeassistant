@@ -1,0 +1,4 @@
+configuration:
+  openai_api_key:
+    name: OpenAI API-Key
+    description: Optional. Wird ausschließlich serverseitig für Coach, Screenshotanalyse und wissenschaftliche Wochenchecks verwendet.

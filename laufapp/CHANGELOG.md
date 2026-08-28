@@ -1,0 +1,47 @@
+# Laufapp Changelog
+
+## v0.1.3 – 2026-08-28
+
+### Datenhaltung & Updates
+- Explizites Datenbankschema (`PRAGMA user_version`) und versionierte Migrationen eingeführt.
+- Bestehende v0.1.0–v0.1.2-Datenbanken werden additiv auf Schema 2 migriert; Läufe, Health-Daten, Schuhe, Wettkämpfe, Trainingsplan, Bestleistungen und Coach-Daten bleiben erhalten.
+- Vor Schema-Migration wird eine integrity-geprüfte SQLite-Sicherung unter `/data/backups/` erzeugt.
+- Bei Migrationsfehler wird der Vorzustand aus dem Backup wiederhergestellt und der Start abgebrochen; Downgrades auf ein älteres Schema werden blockiert.
+- Einmalige, integrity-geprüfte Datenbrücke über `/share/laufapp-transfer/` für den Wechsel von der bisherigen Local App zur späteren GitHub-Repository-App ergänzt. Vorhandene Repository-Daten werden niemals überschrieben.
+
+### Apple Health
+- Apple-Health-Import auf persistenten serverseitigen Hintergrundjob umgestellt.
+- Nach abgeschlossenem Upload kann Browser/Home-Assistant-App geschlossen oder minimiert werden; Status bleibt persistent abrufbar.
+- Ein beim App-Neustart unterbrochener Verarbeitungsjob wird beim nächsten Start erneut aufgenommen; deduplizierte Inserts und transaktionaler Health-Import verhindern Doppel-/Teildaten.
+- Klare Phasen- und Prozentanzeige im Bereich **Mehr → Apple Health**.
+- Fehlgeschlagene Jobs können erneut gestartet werden, solange die lokale Importdatei vorhanden ist.
+- Zeitaufgelöste Laufmetriken ergänzt: Herzfrequenz, Running Speed, Running Power, Schrittlänge, vertikale Oszillation und Bodenkontaktzeit; Kadenz wird aus zeitgebundenen Step-Count-Samples abgeleitet.
+- GPX-Routen werden – soweit im Apple-Export vorhanden – dem passenden Lauf zugeordnet; GPS-Punkte und Höhenprofil werden gespeichert, fehlende Höhenmeter können aus dem Profil abgeleitet werden.
+- Neuer Detail-Endpunkt für Sample-Zusammenfassung und GPS-Punktzahl je Lauf.
+
+### GitHub / Release-Prozess
+- Repository-Metadaten (`repository.yaml`) für ein Home-Assistant-Custom-Repository ergänzt.
+- GitHub-Actions-CI ergänzt: Python 3.13, Compilecheck, Node-Syntaxcheck, vollständige Regressionstests und Docker-Build.
+- Tests sind self-contained; der v0.1.2-Migrationsfixture liegt im Repository und benötigt keinen alten lokalen Quellbaum.
+- Docker-COPY-Quellen werden weiterhin statisch gegen den Build-Kontext geprüft.
+
+### Tests
+- 30 automatisierte Tests plus separater ca. 100-MB-/699k-Record-Importtest.
+- 390-px- und 320-px-Renderprüfung für die neue Import-/Transfer-Oberfläche.
+
+## v0.1.2 – 2026-08-28
+
+### Behoben
+- Home-Assistant-Cloud/Ingress-Zugriff repariert: Die Ingress-Sicherheitsprüfung erkennt nun die von Home Assistant Core gesetzten Header `X-Hass-Source: core.ingress` und `X-Ingress-Path`, statt sich auf die durch Proxy-Header umgeschriebene Client-IP zu verlassen.
+- Direkter Zugriff bleibt blockiert; der Webport ist weiterhin nicht auf den Home-Assistant-Host veröffentlicht.
+- Regressionstest für echten Ingress-Headerpfad, blockierten Direktzugriff und lokalen Healthcheck ergänzt.
+
+## v0.1.1 – 2026-08-28
+
+### Behoben
+- Home-Assistant-Docker-Build repariert: `requirements.txt` liegt im Root der lokalen App und wird nun von dort in das Image kopiert.
+- Neuer statischer Release-Test prüft die `COPY`-Quellen des Dockerfiles.
+
+## v0.1.0 – 2026-08-28
+
+Erstes funktionsfähiges privates Release mit mobile-first PWA, Heute/Woche/Fortschritt/Coach/Mehr, vier Trainingstagen, Zielzeitsteuerung, Apple-Health-Basisimport, Schuhtracking, Prognosen und bestätigungspflichtigem AI-Coach.
