@@ -1,5 +1,15 @@
 # Laufapp Changelog
 
+## v0.1.5 – 2026-08-28
+
+- Apple-Health-Workouts werden zusätzlich aus nativen `WorkoutStatistics` (Distanz, Dauer, Energie) gelesen; Endzeit dient konservativ als Dauer-Fallback.
+- Persistente Importergebnisse enthalten aggregierte Lauf-, Metrik-, Sample-, Routen- und Ablehnungsdiagnosen sowie Success/Warning-Klassifikation.
+- Health-Ergebnisansicht unterscheidet „0 neu“ von „0 gefunden“ und zeigt v0.1.4-Legacyfelder weiterhin.
+- Wochenwechsel per Swipe, race-sicheres Rendering und Pointer-Drag am Griff; freie Tage verschieben, belegte geplante Tage tauschen atomar.
+- Wochenkilometer-API und Auswahl für 1/3/6/12 Monate ohne 100-Läufe-Limit.
+- Bottom-Navigation um rund 18 % vergrößert.
+- Keine Schemaänderung; persistente SQLite-Daten und Ingress-Schutz bleiben unverändert.
+
 ## v0.1.4 – 2026-08-28
 
 ### Behoben

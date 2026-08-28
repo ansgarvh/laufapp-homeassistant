@@ -170,14 +170,27 @@ def move_workout(c,wid:int,new:date):
     if not r:raise KeyError('Workout nicht gefunden')
     if r['status']!='planned':raise ValueError('Nur geplante, noch offene Einheiten können verschoben werden.')
     old=date.fromisoformat(r['scheduled_date'])
+    if new==old:return {'workout':_wdict(r),'warnings':[],'operation':'unchanged'}
     if abs((week_start_for(new)-week_start_for(old)).days)>7:raise ValueError('Ein Training kann höchstens in die vorherige oder nächste Woche verschoben werden.')
-    if c.execute("SELECT id FROM workouts WHERE id!=? AND scheduled_date=? AND status='planned'",(wid,new.isoformat())).fetchone():raise ValueError('Auf diesem Tag liegt bereits eine geplante Laufeinheit.')
+    targets=c.execute("SELECT * FROM workouts WHERE id!=? AND scheduled_date=?",(wid,new.isoformat())).fetchall()
+    if len(targets)>1:raise ValueError('Auf dem Zieltag liegen mehrere Einheiten; ein Tausch ist nicht eindeutig.')
+    target=targets[0] if targets else None
+    if target and target['status']!='planned':raise ValueError('Auf eine absolvierte oder ausgefallene Einheit kann nicht getauscht werden.')
     warnings=[];hard={'quality','long','race','raceprep'}
     if r['workout_type'] in hard:
         for o in c.execute("SELECT * FROM workouts WHERE id!=? AND scheduled_date BETWEEN ? AND ?",(wid,(new-timedelta(days=1)).isoformat(),(new+timedelta(days=1)).isoformat())).fetchall():
             if o['workout_type'] in hard:warnings.append('Zwei belastende Einheiten liegen nun direkt nebeneinander. Prüfe Erholung und Wochenstruktur.');break
-    new_ws=week_start_for(new);c.execute("UPDATE workouts SET scheduled_date=?,week_start=? WHERE id=?",(new.isoformat(),new_ws.isoformat(),wid));c.execute("DELETE FROM plan_reviews WHERE week_start IN (?,?)",(r['week_start'],new_ws.isoformat()))
-    return {'workout':_wdict(c.execute("SELECT * FROM workouts WHERE id=?",(wid,)).fetchone()),'warnings':warnings}
+    new_ws=week_start_for(new)
+    if target:
+        # Both updates share the caller's transaction. A temporary date avoids
+        # ambiguity should a future schema add a unique scheduled-date index.
+        temporary=f"0001-01-{wid % 28 + 1:02d}"
+        c.execute("UPDATE workouts SET scheduled_date=? WHERE id=?",(temporary,wid))
+        c.execute("UPDATE workouts SET scheduled_date=?,week_start=? WHERE id=?",(old.isoformat(),week_start_for(old).isoformat(),target['id']))
+        c.execute("UPDATE workouts SET scheduled_date=?,week_start=? WHERE id=?",(new.isoformat(),new_ws.isoformat(),wid))
+    else:c.execute("UPDATE workouts SET scheduled_date=?,week_start=? WHERE id=?",(new.isoformat(),new_ws.isoformat(),wid))
+    c.execute("DELETE FROM plan_reviews WHERE week_start IN (?,?)",(r['week_start'],new_ws.isoformat()))
+    return {'workout':_wdict(c.execute("SELECT * FROM workouts WHERE id=?",(wid,)).fetchone()),'warnings':warnings,'operation':'swap' if target else 'move'}
 
 def auto_match_run(c,run_id):
     r=c.execute("SELECT * FROM runs WHERE id=?",(run_id,)).fetchone()

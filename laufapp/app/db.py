@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
-APP_VERSION = "0.1.4"
+APP_VERSION = "0.1.5"
 CURRENT_SCHEMA_VERSION = 2
 LEGACY_V012_SCHEMA_VERSION = 1
 

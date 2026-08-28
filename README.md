@@ -1,6 +1,17 @@
-# Laufapp v0.1.4
+# Laufapp v0.1.5
 
 Private, mobile-first Lauf-PWA für Home Assistant OS auf dem Beelink Mini S12. Die App verbindet eine lokale Trainings-/Prognoseengine mit Apple-Health-Daten und einem optionalen OpenAI-Coach. Sie ist für genau einen Nutzer ausgelegt.
+
+## Highlights von v0.1.5
+
+- Robuster nativer Apple-Health-Import: Workout-Attribute und verschachtelte `WorkoutStatistics`, aggregierte Diagnose, sichere Reimport-Deduplizierung und Warnung bei verdächtigen Null-Ergebnissen. Recovery-Signale und Prognosen werden nach dem Import beim nächsten Aufruf frisch geladen.
+- Wochenübersicht: Wischen im Kalenderkopf wechselt die Woche; geplante Einheiten lassen sich am Griff per Pointer Events verschieben. Freier Tag bedeutet Verschieben, belegter geplanter Tag atomaren Tausch. „Verschieben“ bleibt als zugänglicher Fallback erhalten; abgeschlossene/ausgefallene Einheiten sind geschützt.
+- Fortschritt: Wochenkilometer für Monat, 3, 6 oder 12 Monate aus der vollständigen relevanten Laufhistorie statt nur den letzten 100 Läufen; Standard ist 3 Monate.
+- Bottom-Navigation: Symbole und Beschriftungen sind rund 18 % größer.
+
+Zeiträume sind rollierende Kalendermonate bis heute; die angebrochene aktuelle Woche wird eingeschlossen. Frühere unbekannte Historie wird nicht erfunden, echte Nullwochen innerhalb des gewählten Bereichs werden gezeigt.
+
+> Die Behebung des konkreten Produktionsimports muss mit dem realen Export auf dem Beelink bestätigt werden. Statisch/isoliert getestet; Home-Assistant-Integration muss auf dem Beelink verifiziert werden.
 
 ## Highlights von v0.1.4
 

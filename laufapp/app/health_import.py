@@ -108,6 +108,17 @@ def elev(e):
     return None
 
 
+def _workout_stat(e, type_fragment: str, fields=("sum", "average")):
+    """Extract a value and unit from a nested Apple WorkoutStatistics node."""
+    for ch in list(e):
+        if ch.tag.split("}")[-1] != "WorkoutStatistics" or type_fragment not in ch.attrib.get("type", ""):
+            continue
+        for field in fields:
+            if ch.attrib.get(field) is not None:
+                return ch.attrib[field], ch.attrib.get("unit")
+    return None, None
+
+
 def insert_run(c, e, cutoff):
     a = e.attrib
     if a.get("workoutActivityType") not in RUNNING_TYPES:
@@ -121,15 +132,28 @@ def insert_run(c, e, cutoff):
         return None
     if sd.date() < cutoff:
         return None
-    ds, km = dur(a.get("duration"), a.get("durationUnit")), dist(a.get("totalDistance"), a.get("totalDistanceUnit"))
-    if not ds or not km or ds <= 0 or km <= 0:
+    dv, du = a.get("duration"), a.get("durationUnit")
+    if dv is None:
+        dv, du = _workout_stat(e, "Duration")
+    ds = dur(dv, du)
+    if ds is None and a.get("endDate"):
+        try:
+            ds = (parse_dt(a["endDate"]) - sd).total_seconds()
+        except Exception:
+            pass
+    xv, xu = a.get("totalDistance"), a.get("totalDistanceUnit")
+    if xv is None:
+        xv, xu = _workout_stat(e, "Distance")
+    km = dist(xv, xu)
+    if ds is None or km is None or ds <= 0 or km <= 0:
         return None
     start = sd.isoformat()
     end = iso(a.get("endDate"))
     external = a.get("uuid") or fp("run", start, end, round(km, 4), round(ds, 2))
     hr = avg_hr(e)
     el = elev(e)
-    cal = f(a.get("totalEnergyBurned"))
+    energy, _energy_unit = _workout_stat(e, "ActiveEnergyBurned")
+    cal = f(a.get("totalEnergyBurned") or energy)
     existing = c.execute("SELECT id FROM runs WHERE external_id=?", (external,)).fetchone()
     if existing:
         return ("existing", int(existing["id"]))
@@ -379,16 +403,20 @@ def _iter_gpx_points(raw: BinaryIO):
         elem.clear()
 
 
-def import_routes(c: sqlite3.Connection, z: zipfile.ZipFile | None, cutoff: date, progress: ProgressCallback | None = None) -> int:
+def import_routes(c: sqlite3.Connection, z: zipfile.ZipFile | None, cutoff: date, progress: ProgressCallback | None = None) -> dict[str, int]:
     if z is None:
-        return 0
+        return {"routes_seen": 0, "routes_attached": 0, "routes_unmatched": 0, "gps_points_added": 0}
     route_names = [n for n in z.namelist() if n.lower().endswith(".gpx") and ("route" in n.lower() or "workout" in n.lower())]
-    added = 0
+    added = attached = unmatched = 0
     for idx, name in enumerate(route_names):
         if progress:
             progress("Routen", 0.86 + 0.08 * (idx / max(1, len(route_names))), {"routes_seen": idx})
-        with z.open(name) as raw:
-            points = list(_iter_gpx_points(raw))
+        try:
+            with z.open(name) as raw:
+                points = list(_iter_gpx_points(raw))
+        except ET.ParseError:
+            unmatched += 1
+            continue
         if not points:
             continue
         ts = epoch(points[0][1])
@@ -396,7 +424,9 @@ def import_routes(c: sqlite3.Connection, z: zipfile.ZipFile | None, cutoff: date
             continue
         run_id = _find_run_for_timestamp(c, ts, cutoff)
         if not run_id:
+            unmatched += 1
             continue
+        attached += 1
         elevations = []
         for seq, timestamp, lat, lon, elevation in points:
             sampled = iso(timestamp)
@@ -413,7 +443,7 @@ def import_routes(c: sqlite3.Connection, z: zipfile.ZipFile | None, cutoff: date
                 "UPDATE runs SET elevation_m=COALESCE(elevation_m,?) WHERE id=?",
                 (round(gain, 1), run_id),
             )
-    return added
+    return {"routes_seen": len(route_names), "routes_attached": attached, "routes_unmatched": unmatched, "gps_points_added": added}
 
 
 def import_apple_health(
@@ -424,7 +454,13 @@ def import_apple_health(
 ) -> dict[str, Any]:
     cutoff = date_cutoff(months)
     stream, z, total_bytes = open_xml(path)
-    runs = merged = metrics = workouts_seen = records_seen = samples_staged = 0
+    runs = merged = existing = metrics = workouts_seen = records_seen = samples_staged = 0
+    running_seen = non_running = relevant_records = 0
+    rejected: dict[str, int] = {}
+    metric_seen = {"resting_hr": 0, "hrv_sdnn": 0, "body_mass": 0, "vo2max": 0}
+    metric_added = dict.fromkeys(metric_seen, 0)
+    sample_staged_by_type = dict.fromkeys((v[0] for v in RUN_SAMPLE_TYPES.values()), 0)
+    earliest = latest = None
     nights: dict[date, list[tuple[datetime, datetime]]] = {}
     # Temporary staging avoids retaining all heart-rate/running-dynamics samples
     # in RAM while still allowing us to associate records with workouts that may
@@ -440,20 +476,60 @@ def import_apple_health(
             tag = e.tag.split("}")[-1]
             if tag == "Workout":
                 workouts_seen += 1
+                activity = e.attrib.get("workoutActivityType")
+                if activity in RUNNING_TYPES:
+                    running_seen += 1
+                else:
+                    non_running += 1
                 result = insert_run(c, e, cutoff)
                 runs += int(bool(result and result[0] == "added"))
                 merged += int(bool(result and result[0] == "merged"))
+                existing += int(bool(result and result[0] == "existing"))
+                if activity in RUNNING_TYPES and not result:
+                    a = e.attrib
+                    reason = "invalid_start_date"
+                    try:
+                        sd = parse_dt(a.get("startDate") or a.get("creationDate") or "")
+                        if sd.date() < cutoff:
+                            reason = "before_cutoff"
+                        else:
+                            dv, du = a.get("duration"), a.get("durationUnit")
+                            if dv is None: dv, du = _workout_stat(e, "Duration")
+                            ds = dur(dv, du)
+                            if ds is None and a.get("endDate"): ds = (parse_dt(a["endDate"]) - sd).total_seconds()
+                            xv, xu = a.get("totalDistance"), a.get("totalDistanceUnit")
+                            if xv is None: xv, xu = _workout_stat(e, "Distance")
+                            km = dist(xv, xu)
+                            reason = "missing_distance" if km is None else "missing_duration" if ds is None else "non_positive_distance" if km <= 0 else "non_positive_duration"
+                    except Exception:
+                        pass
+                    rejected[reason] = rejected.get(reason, 0) + 1
                 e.clear()
             elif tag == "Record":
                 records_seen += 1
+                typ = e.attrib.get("type")
+                if typ in METRIC_TYPES:
+                    metric_seen[METRIC_TYPES[typ][0]] += 1
                 sl = sleep_interval(e, cutoff)
                 if sl:
+                    relevant_records += 1
                     night, s, en = sl
                     nights.setdefault(night, []).append((s, en))
                 elif insert_metric(c, e, cutoff):
                     metrics += 1
+                    relevant_records += 1
+                    metric_added[METRIC_TYPES[typ][0]] += 1
                 elif stage_run_sample(c, e, cutoff):
                     samples_staged += 1
+                    relevant_records += 1
+                    sample_staged_by_type[RUN_SAMPLE_TYPES[typ][0]] += 1
+                try:
+                    seen_date = parse_dt(e.attrib.get("startDate") or e.attrib.get("creationDate") or "").date()
+                    if seen_date >= cutoff and (typ in METRIC_TYPES or typ in RUN_SAMPLE_TYPES or typ == SLEEP_TYPE):
+                        earliest = min(earliest, seen_date) if earliest else seen_date
+                        latest = max(latest, seen_date) if latest else seen_date
+                except Exception:
+                    pass
                 e.clear()
             if progress and (records_seen + workouts_seen) % 5000 == 0:
                 ratio = min(1.0, _stream_position(stream) / max(1, total_bytes))
@@ -473,7 +549,8 @@ def import_apple_health(
         if progress:
             progress("Laufmetriken", 0.82, {"samples_staged": samples_staged})
         samples_added = attach_staged_samples(c, cutoff)
-        gps_points_added = import_routes(c, z, cutoff, progress)
+        route_result = import_routes(c, z, cutoff, progress)
+        gps_points_added = route_result["gps_points_added"]
     except ET.ParseError as exc:
         raise ValueError(f"Apple-Health-XML konnte nicht gelesen werden: {exc}") from exc
     finally:
@@ -482,14 +559,37 @@ def import_apple_health(
             z.close()
     if progress:
         progress("Import abgeschlossen", 0.95, {"runs_added": runs, "metrics_added": metrics})
+    rejected_total = sum(rejected.values())
+    classification = "success"
+    useful_runs = runs or merged or existing
+    if ((running_seen and not useful_runs) or (workouts_seen and not running_seen) or
+            (samples_staged and not samples_added and not useful_runs) or
+            (route_result["routes_seen"] and not route_result["routes_attached"] and not useful_runs)):
+        classification = "warning"
     return {
         "runs_added": runs,
         "runs_merged": merged,
+        "runs_already_existing": existing,
+        "running_workouts_rejected": rejected_total,
+        "rejection_reasons": rejected,
         "metrics_added": metrics,
         "run_samples_added": samples_added,
         "gps_points_added": gps_points_added,
         "workouts_seen": workouts_seen,
         "records_seen": records_seen,
+        "relevant_records_seen": relevant_records,
+        "running_workouts_seen": running_seen,
+        "non_running_workouts_seen": non_running,
+        "earliest_relevant_date_seen": earliest.isoformat() if earliest else None,
+        "latest_relevant_date_seen": latest.isoformat() if latest else None,
+        "metric_records_seen": metric_seen,
+        "metric_records_added": metric_added,
+        "sleep_intervals_seen": sum(len(v) for v in nights.values()),
+        "sleep_nights_added": metrics - sum(metric_added.values()),
+        "samples_staged": samples_staged,
+        "samples_staged_by_type": sample_staged_by_type,
+        **route_result,
+        "classification": classification,
         "cutoff_date": cutoff.isoformat(),
         "months": months,
     }
