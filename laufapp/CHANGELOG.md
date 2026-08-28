@@ -1,5 +1,12 @@
 # Laufapp Changelog
 
+## v0.1.4 – 2026-08-28
+
+### Behoben
+- Streaming für Home-Assistant-Ingress mit `ingress_stream: true` explizit aktiviert, damit große Apple-Health-Uploads nicht mehr durch den nicht-streamenden Ingress-Pfad ausgebremst werden.
+- Release-Regressionstest ergänzt: Ingress, Streaming und interner Port 8099 müssen aktiv bleiben, während die direkte Portfreigabe weiterhin deaktiviert ist.
+- Keine Datenbankschemaänderung; Schema 2 und alle bestehenden Migrations-, Import- und Ingress-Sicherheitsmechanismen bleiben unverändert.
+
 ## v0.1.3 – 2026-08-28
 
 ### Datenhaltung & Updates

@@ -1,8 +1,14 @@
-# Laufapp v0.1.3
+# Laufapp v0.1.4
 
 Private, mobile-first Lauf-PWA für Home Assistant OS auf dem Beelink Mini S12. Die App verbindet eine lokale Trainings-/Prognoseengine mit Apple-Health-Daten und einem optionalen OpenAI-Coach. Sie ist für genau einen Nutzer ausgelegt.
 
-## Highlights von v0.1.3
+## Neu in v0.1.4
+
+- **Große Health-Uploads über Ingress:** Home-Assistant-Ingress-Streaming ist nun explizit aktiviert. Der Webport bleibt unveröffentlicht und die bestehende Ingress-Authentifizierungsprüfung unverändert.
+- **Regressionsschutz:** Die Release-Tests verlangen aktiviertes Ingress-Streaming und prüfen weiterhin, dass Port 8099 nicht direkt freigegeben ist.
+- **Keine Datenmigration:** v0.1.4 verwendet unverändert Datenbankschema 2; `/data/laufapp.sqlite3`, Importjobs und alle Nutzerdaten bleiben erhalten.
+
+## Funktionen aus v0.1.3
 
 - **Persistente Daten über Updates:** Läufe, Health-Metriken, Schuhe, Wettkämpfe, Trainingsplan, Bestleistungen und Coach-Historie bleiben in `/data/laufapp.sqlite3` erhalten.
 - **Versionierte Datenbankmigration:** v0.1.2 wird beim Start automatisch auf Schema 2 migriert. Vor jeder Schemaänderung entsteht eine SQLite-Sicherung unter `/data/backups/`; bei einem Migrationsfehler wird der Vorzustand wiederhergestellt und der App-Start abgebrochen.
@@ -46,22 +52,21 @@ Der API-Key verbleibt serverseitig in der Home-Assistant-App-Konfiguration (`/da
 
 Standardmodelle: `gpt-5.6-terra` für den Coach und `gpt-5.6-luna` für Screenshot-Extraktion. Wissenschaftliche Websuche ist optional.
 
-## Teststatus v0.1.3
+## Teststatus v0.1.4
 
-Vor der Paketierung wurden unter anderem ausgeführt:
+Für den v0.1.4-Änderungsstand wurden ausgeführt:
 
 - Python-Compilecheck für Backend und Tests.
 - JavaScript-Syntaxcheck mit Node.
-- **30 automatisierte Regressionstests** inklusive vollständigem synthetischem End-to-End-Workflow.
+- **30 automatisierte Regressionstests** inklusive synthetischem End-to-End-Workflow.
 - Upgrade-Test einer gefüllten v0.1.2-Datenbank auf v0.1.3 mit Datenerhalt und Vorab-Backup.
 - Fehler-Injektion in die Migration mit Wiederherstellung des exakten Vorzustands.
 - Test des Einmal-Transfers local → GitHub sowie Schutz vor Überschreiben einer bereits vorhandenen Repository-Datenbank.
 - Hintergrundimport, Rollback bei defektem Export und Wiederaufnahme eines unterbrochenen Verarbeitungsjobs.
 - Detaildaten-Test für Herzfrequenz, Speed, Power, Schrittlänge, vertikale Oszillation, Bodenkontaktzeit, Kadenz und GPX.
-- Belastungstest mit einer ca. 100-MB-ZIP und rund 699.000 Health-Records.
-- Responsive Renderprüfung der neuen Import-/GitHub-Oberfläche bei 390 px und 320 px ohne horizontalen Overflow.
+- Statische Prüfung der bestehenden 320-px-Mindestbreite und der begrenzten Desktop-Breite; v0.1.4 verändert keine UI-Struktur oder Styles.
 
-Ein echter Docker-/Supervisor-Build kann in der aktuellen Entwicklungsumgebung nicht ausgeführt werden, weil dort kein Docker-Daemon vorhanden ist. Die v0.1.2-Basis wurde bereits erfolgreich auf dem realen Home-Assistant-OS-Beelink gebaut; für v0.1.3 muss der reale Build beim einmaligen lokalen Update erneut verifiziert werden. Echte OpenAI-Netzwerkaufrufe mit dem persönlichen API-Key sind ebenfalls nicht Teil der isolierten Tests.
+Ein Docker-Build war in der verwendeten Entwicklungsumgebung ohne Docker-CLI/-Daemon nicht möglich. Die statischen Docker-COPY- und Versionsprüfungen liefen erfolgreich; der unabhängige Docker-Build bleibt Bestandteil von GitHub Actions. Ein isolierter Konfigurationstest ersetzt keinen echten großen Upload durch Home Assistant/Nabu Casa auf dem Beelink. Echte OpenAI-Netzwerkaufrufe mit dem persönlichen API-Key sind ebenfalls nicht Teil der isolierten Tests.
 
 ## Lokale Entwicklung
 

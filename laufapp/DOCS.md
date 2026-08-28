@@ -1,4 +1,4 @@
-# Laufapp v0.1.3 – Bedienung
+# Laufapp v0.1.4 – Bedienung
 
 ## Heute
 Wettkampfziel, aktuelle Prognose, Zielbewertung, nächste Einheit und Recovery-Signale.

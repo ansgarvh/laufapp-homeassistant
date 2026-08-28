@@ -1,4 +1,4 @@
-# Sicherheitskonzept – Laufapp v0.1.3
+# Sicherheitskonzept – Laufapp v0.1.4
 
 ## Lokale Datenhaltung
 
@@ -47,8 +47,8 @@ Die KI kann keinen Plan direkt verändern. Sie kann nur validierte Vorschläge e
 
 ## Netzwerk
 
-Der Port 8099 wird standardmäßig nicht auf dem Home-Assistant-Host veröffentlicht. Im Produktionscontainer ist direkter externer Zugriff blockiert; Home-Assistant-Ingress und der lokale Container-Healthcheck bleiben erlaubt. Damit ist für den normalen Fernzugriff keine FritzBox-Portfreigabe erforderlich.
+Der Port 8099 wird standardmäßig nicht auf dem Home-Assistant-Host veröffentlicht. Im Produktionscontainer ist direkter externer Zugriff blockiert; Home-Assistant-Ingress und der lokale Container-Healthcheck bleiben erlaubt. Ingress-Streaming ist für große Uploads explizit aktiviert, ändert aber nichts an dieser Zugriffskontrolle. Damit ist für den normalen Fernzugriff keine FritzBox-Portfreigabe erforderlich.
 
 ## Testgrenze
 
-Python/JavaScript, Datenbankmigration, Rollback, Importjobs, Health-Parser, Transferpfad und vollständiger synthetischer Workflow wurden isoliert getestet. Ein echter Docker-/Supervisor-Build von v0.1.3 ist in dieser Entwicklungsumgebung mangels Docker-Daemon nicht möglich und muss beim Update auf dem realen Home-Assistant-OS-Beelink verifiziert werden. Echte OpenAI-Aufrufe mit dem persönlichen API-Key müssen ebenfalls im Zielsystem verifiziert werden.
+Python/JavaScript, Datenbankmigration, Rollback, Importjobs, Health-Parser, Transferpfad und vollständiger synthetischer Workflow werden isoliert geprüft. Ingress-Streaming kann statisch/regressiv abgesichert werden; ein echter großer Upload durch Supervisor/Nabu Casa muss auf dem Home-Assistant-OS-Beelink verifiziert werden. Echte OpenAI-Aufrufe mit dem persönlichen API-Key müssen ebenfalls im Zielsystem verifiziert werden.
