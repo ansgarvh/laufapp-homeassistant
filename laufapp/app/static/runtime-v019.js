@@ -47,10 +47,14 @@
       const data = await response.clone().json();
       const message = validationMessage(data?.detail);
       if (!message || typeof data?.detail === 'string') return response;
+      const headers = new Headers(response.headers);
+      headers.delete('content-length');
+      headers.delete('content-encoding');
+      headers.set('content-type', 'application/json');
       return new Response(JSON.stringify({...data, detail: message}), {
         status: response.status,
         statusText: response.statusText,
-        headers: response.headers,
+        headers,
       });
     } catch {
       return response;
