@@ -4,8 +4,10 @@ ROOT=Path(__file__).resolve().parents[1]
 
 def test_versions_and_assets():
     cfg=yaml.safe_load((ROOT/'laufapp/config.yaml').read_text())
-    assert cfg['version']=='0.1.3'
-    assert 'APP_VERSION = "0.1.3"' in (ROOT/'laufapp/app/db.py').read_text()
+    assert cfg['version']=='0.1.4'
+    assert 'APP_VERSION = "0.1.4"' in (ROOT/'laufapp/app/db.py').read_text()
+    assert 'ARG BUILD_VERSION=0.1.4' in (ROOT/'laufapp/Dockerfile').read_text()
+    assert "const CACHE='laufapp-v0.1.4'" in (ROOT/'laufapp/app/static/sw.js').read_text()
     static=ROOT/'laufapp/app/static'
     for name in ['index.html','styles.css','app.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png']:assert (static/name).exists()
     m=json.loads((static/'manifest.webmanifest').read_text());assert m['display']=='standalone'
@@ -14,6 +16,8 @@ def test_versions_and_assets():
 def test_ha_app_config():
     cfg=yaml.safe_load((ROOT/'laufapp/config.yaml').read_text())
     assert cfg['arch']==['amd64'] and cfg['ingress'] is True and cfg['ingress_port']==8099
+    assert cfg['ingress_stream'] is True
+    assert cfg['ports']['8099/tcp'] is None
     assert cfg['schema']['openai_api_key']=='password'
     assert 'share:rw' in cfg.get('map',[])
 
