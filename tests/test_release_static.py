@@ -4,15 +4,18 @@ ROOT=Path(__file__).resolve().parents[1]
 
 def test_versions_and_assets():
     cfg=yaml.safe_load((ROOT/'laufapp/config.yaml').read_text())
-    assert cfg['version']=='0.1.9'
-    assert 'APP_VERSION = "0.1.9"' in (ROOT/'laufapp/app/db.py').read_text()
-    assert 'ARG BUILD_VERSION=0.1.9' in (ROOT/'laufapp/Dockerfile').read_text()
+    assert cfg['version']=='0.2.0'
+    assert 'APP_VERSION = "0.2.0"' in (ROOT/'laufapp/app/main_v020.py').read_text()
+    assert 'ARG BUILD_VERSION=0.2.0' in (ROOT/'laufapp/Dockerfile').read_text()
+    assert 'main_v020:app' in (ROOT/'laufapp/run.sh').read_text()
     static=ROOT/'laufapp/app/static'
-    for name in ['index.html','styles.css','bugfix.css','app.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png']:assert (static/name).exists()
+    for name in ['index.html','styles.css','bugfix.css','app.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','assets/v020.js','assets/v020.css']:assert (static/name).exists()
     m=json.loads((static/'manifest.webmanifest').read_text());assert m['display']=='standalone'
-    assert "const CACHE='laufapp-v0.1.9'" in (static/'sw.js').read_text()
-    assert 'assets/bugfix.css' in (static/'index.html').read_text()
+    assert "const CACHE='laufapp-v0.2.0'" in (static/'sw.js').read_text()
+    index=(static/'index.html').read_text()
+    assert 'assets/bugfix.css' in index and 'assets/v020.css' in index and 'assets/v020.js' in index
     subprocess.run(['node','--check',str(static/'app.js')],check=True)
+    subprocess.run(['node','--check',str(static/'assets/v020.js')],check=True)
 
 def test_ha_app_config():
     cfg=yaml.safe_load((ROOT/'laufapp/config.yaml').read_text())
@@ -37,7 +40,6 @@ def test_dockerfile_copy_sources_exist_in_build_context():
         if not line or line.startswith('#') or not line.upper().startswith('COPY '):
             continue
         parts = shlex.split(line)
-        # Current Dockerfile uses simple COPY syntax; ignore flags defensively.
         args = [p for p in parts[1:] if not p.startswith('--')]
         assert len(args) >= 2, f'Invalid COPY instruction: {line}'
         for src in args[:-1]:
