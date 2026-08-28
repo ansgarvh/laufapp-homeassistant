@@ -1,5 +1,14 @@
 # Laufapp Changelog
 
+## v0.1.9 – 2026-08-28
+
+- „Plan neu berechnen“ aus Einstellungen funktioniert auch ohne vorher geöffneten Woche-Tab; ein `start=null` wird als aktuelle Kalenderwoche behandelt statt als 422-Fehler mit `[object Object]` im Frontend zu enden.
+- Die Wochenplanung repariert eindeutig veraltete v0.1.8-Engine-Dubletten, wenn auf demselben Tag bereits eine absolvierte, verknüpfte oder manuell geschützte Einheit vorhanden ist, und erzeugt auf belegten Tagen keine zusätzliche automatische Einheit.
+- Bei einer Neuberechnung berücksichtigt der automatisch erzeugte Restplan bereits geschützte Wochenkilometer. Automatische Einheiten werden bei Bedarf skaliert, statt die eingestellte Wochenobergrenze durch Addition auf absolvierte/manuelle Einheiten zu überschreiten.
+- Fortschritt: Datumsbeschriftungen der Wochen stehen wieder im reservierten Bereich unter den Balken und überlagern das Diagramm nicht mehr.
+- Woche: Drag-Griffe bleiben bewusst nur an geplanten, verschiebbaren Einheiten sichtbar; absolvierte/geschützte Zeilen behalten nun dennoch dieselbe Spaltenausrichtung.
+- Keine Datenbankschemaänderung; Apple-Health-Daten, Läufe, Schuhe, Wettkämpfe, Einstellungen und manuelle Planänderungen bleiben erhalten.
+
 ## v0.1.8 – 2026-08-28
 
 - Dedizierte mobile Einstellungen-Navigation mit persistenten, serverseitig validierten Planungslimits.
