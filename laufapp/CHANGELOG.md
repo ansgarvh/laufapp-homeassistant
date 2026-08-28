@@ -1,5 +1,14 @@
 # Laufapp Changelog
 
+## v0.1.9 – 2026-08-28
+
+- Planneuberechnung aus **Einstellungen** startet auch dann zuverlässig mit der aktuellen Woche, wenn zuvor keine Wochenansicht geöffnet wurde; strukturierte FastAPI-Validierungsfehler erscheinen nicht mehr als `[object Object]`.
+- Verbleibenden v0.1.8-Refreshfehler behoben: bereits vorhandene/vergangene bzw. geschützte Einheiten werden beim Neuplanen berücksichtigt, doppelte unberührte Engine-Zeilen derselben Trainingsdatei bereinigt und neue Einheiten nur innerhalb des verbleibenden Wochenbudgets erzeugt. Wiederholtes Neuberechnen bläht die Woche dadurch nicht mehr über das gesetzte Wochenlimit auf.
+- Manuell angepasste und absolvierte Einheiten bleiben geschützt; für eine teilweise bereits vergangene aktuelle Woche werden keine neuen Trainings rückwirkend erzeugt.
+- Wochenbeschriftungen in **Fortschritt** wieder unter den Balken positioniert; die v0.1.6-Umstellung auf klickbare `button`-Balken hatte den alten `div`-CSS-Selektor unwirksam gemacht.
+- Zusätzliche Regressionstests decken wiederholte Planneuberechnung, Wochenlimit, Schutz vorhandener Einheiten sowie die neuen Runtime-/Chart-Fixes ab.
+- Keine Schemaänderung; Home-Assistant-Ingress, `ingress_stream`, Apple-Health-Daten, GPS und Run-Samples bleiben unverändert.
+
 ## v0.1.8 – 2026-08-28
 
 - Dedizierte mobile Einstellungen-Navigation mit persistenten, serverseitig validierten Planungslimits.

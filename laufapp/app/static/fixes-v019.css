@@ -1,0 +1,12 @@
+/* v0.1.9: chart bars are buttons; keep sparse week labels below the bars. */
+.chart .chart-bar > span {
+  position: absolute;
+  bottom: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 8px;
+  line-height: 1;
+  color: var(--muted);
+  white-space: nowrap;
+  pointer-events: none;
+}
