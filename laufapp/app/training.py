@@ -108,6 +108,27 @@ def performance_profile(c,race=None):
 def _prefs(c,dist):
     return {'volume':get_setting(c,'training_volume_profile','steady'),'difficulty':get_setting(c,'training_difficulty','balanced'),'baseline':max(8,min(160,float(get_setting(c,'baseline_weekly_km',40)))),'max_long':max(8,min(50,float(get_setting(c,'max_long_run_km',32 if dist>=40 else 24)))),'max_share':max(.30,min(.60,float(get_setting(c,'max_long_run_share',.45))))}
 
+def established_volume(c,ref:date|None=None):
+    """Robust baseline from eight *completed* weeks; the current week is context only."""
+    ref=ref or date.today(); current=week_start_for(ref); vols=weekly_volume(c,9,current-timedelta(days=1))[:8]
+    active=[v for v in vols if v>=5]
+    if len(active)<3:return {'km':None,'trend':'unzureichende Historie','completed_weeks':vols,'current_partial_km':weekly_volume(c,1,ref)[0]}
+    ordered=sorted(active); trimmed=ordered[1:-1] if len(ordered)>=5 else ordered
+    robust=sum(trimmed)/len(trimmed)
+    recent=active[-3:]
+    # Three consecutive completed reductions, with the latest below 70% of the
+    # older robust level, are treated as detraining rather than a single deload.
+    detraining=len(recent)==3 and recent[0]>recent[1]>recent[2] and recent[-1]<robust*.70
+    if detraining: robust=.65*sum(recent)/3+.35*robust
+    slope=(recent[-1]-recent[0])/max(recent[0],1)
+    trend='reduziert' if detraining else 'steigend' if slope>.12 else 'stabil' if slope>=-.12 else 'wechselhaft'
+    return {'km':round(robust,1),'trend':trend,'completed_weeks':vols,'current_partial_km':weekly_volume(c,1,ref)[0]}
+
+def long_run_history(c,ref:date|None=None):
+    ref=ref or date.today(); start=(ref-timedelta(days=56)).isoformat()
+    runs=[(parse_dt(r['started_at']).date(),float(r['distance_km'])) for r in c.execute("SELECT started_at,distance_km FROM runs WHERE started_at>=? ORDER BY started_at",(start,)).fetchall() if float(r['distance_km'] or 0)>=12]
+    return {'distances':[x[1] for x in runs],'longest_4w':max((x[1] for x in runs if x[0]>=ref-timedelta(days=28)),default=0),'longest_8w':max((x[1] for x in runs),default=0),'ge20':sum(x[1]>=20 for x in runs),'ge24':sum(x[1]>=24 for x in runs),'ge28':sum(x[1]>=28 for x in runs),'ge30':sum(x[1]>=30 for x in runs)}
+
 def _zones(c,race):
     dist=float(race['distance_km']);goal=float(race['goal_seconds'])/dist;p5=predict_distance(c,5);p10=predict_distance(c,10);phm=predict_distance(c,21.0975)
     threshold=(p10['predicted_seconds']/10) if p10 else goal-(18 if dist>=20 else 5)
@@ -115,105 +136,143 @@ def _zones(c,race):
     interval=(p5['predicted_seconds']/5) if p5 else max(180,threshold-20)
     return {'easy':(goal+(55 if dist>=20 else 45),goal+(95 if dist>=20 else 80)),'goal':(goal-5,goal+5),'threshold':(threshold-5,threshold+5),'interval':(interval-4,interval+4)}
 
-def _weekly_target(c,race,ws):
-    prefs=_prefs(c,float(race['distance_km']));recent=[v for v in weekly_volume(c,4,ws) if v>0];base=sum(recent)/len(recent) if recent else prefs['baseline'];days=(date.fromisoformat(race['race_date'])-ws).days
-    if days<=6:return max(14,base*.45),'race'
-    if days<=13:return max(18,base*.65),'taper'
-    if days<=20:return max(24,base*.82),'taper'
-    if ws.isocalendar().week%4==0:return max(20,base*.86),'deload'
-    growth={'gradual':1.03,'steady':1.055,'progressive':1.075}.get(prefs['volume'],1.055);ceiling=82 if float(race['distance_km'])>=40 else 66 if float(race['distance_km'])>=20 else 54
-    return max(20,min(ceiling,base*growth)),'build'
+def _phase(race,ws):
+    weeks=max(0,(date.fromisoformat(race['race_date'])-ws).days//7)
+    if weeks==0:return 'race',weeks
+    if weeks<=2:return 'taper',weeks
+    if weeks<=5:return 'peak',weeks
+    if weeks<=12:return 'specific',weeks
+    return 'build',weeks
 
-def _templates(c,dist,phase,total):
-    prefs=_prefs(c,dist);diff=prefs['difficulty']
-    if phase=='race':
-        rem=max(10,total-dist)
-        return [('easy','Locker + Strides',min(8,rem*.42),'easy','2–3/10','Frische erhalten','Locker laufen, danach 4 × 20 s lockere Steigerungen.'),('raceprep','Race-Pace Aktivierung',min(7,rem*.34),'goal','5–6/10','Wettkampfgefühl aktivieren','Kurzes Einlaufen, 3 × 1 km in Zielpace mit viel lockerer Pause, auslaufen.'),('easy','Shakeout',max(4,rem*.24),'easy','1–2/10','Beine locker halten','Sehr locker; nur wenn du dich frisch fühlst.'),('race','Wettkampf',dist,'goal','wettkampfspezifisch','Zielwettkampf','Pacing kontrolliert eröffnen und den im Training erprobten Fueling-Plan umsetzen.')]
-    cap=min(32 if dist>=40 else 24 if dist>=20 else 18 if dist>=10 else 15,prefs['max_long']);long_km=min(cap,max(12 if dist>=20 else 9,total*min(.38 if dist>=20 else .32,prefs['max_share'])))
-    qfrac={'comfortable':.18,'balanced':.22,'challenging':.25}.get(diff,.22);quality=max(7,total*qfrac);easy1=max(5,total*.20);easy2=max(5,total-long_km-quality-easy1)
-    if phase=='deload':qt='Kontrollierter Tempolauf';qd='2 km einlaufen, 20–25 min kontrolliert zügig, locker auslaufen. Kein All-out.';qz='threshold';qr='6–7/10'
-    elif dist>=20:
-        reps={'comfortable':3,'balanced':4,'challenging':5}.get(diff,4);qt='Schwellenintervalle';qd=f'2 km einlaufen, {reps} × 2 km kontrolliert an der Schwelle, 2 min Trabpause, locker auslaufen.';qz='threshold';qr={'comfortable':'6–7/10','balanced':'7–8/10','challenging':'8/10'}.get(diff,'7–8/10')
-    else:
-        reps={'comfortable':5,'balanced':6,'challenging':7}.get(diff,6);qt=f'{reps} × 1 km';qd=f'2 km einlaufen, {reps} × 1 km kontrolliert schnell, 2 min Trabpause, auslaufen.';qz='interval';qr='7–8/10'
-    ld='Reduzierter Longrun. Intensität niedrig halten; Ziel ist Frische.' if phase=='taper' else ('Ruhiger Longrun. Fueling und Trinken wie im Wettkampf testen.' if dist>=20 else 'Ruhiger langer Lauf in entspannter Intensität.')
-    return [('easy','Easy Run',easy1,'easy','2–3/10','Aerobe Basis','Locker und gesprächsfähig laufen. Bei Hitze, Hügeln oder Müdigkeit hat RPE Vorrang vor Pace.'),('quality',qt,quality,qz,qr,'Schwelle & Laufökonomie',qd),('easy','Easy Run',easy2,'easy','2–3/10','Umfang ohne hohe Ermüdung','Locker laufen. Pace nicht erzwingen.'),('long','Long Run',long_km,'easy','3–4/10','Ausdauer & Ermüdungsresistenz',ld)]
+def _block_recovery(c,ws,phase):
+    if phase not in {'build','specific'}:return False
+    # Derive block position from race-relative weeks, not calendar week number.
+    race=current_race(c); race_ws=week_start_for(date.fromisoformat(race['race_date']))
+    sequence=((race_ws-ws).days//7)
+    cycle=3 if phase=='specific' else 4
+    return sequence%cycle==0
+
+def _weekly_target(c,race,ws):
+    prefs=_prefs(c,float(race['distance_km'])); ev=established_volume(c,ws);base=ev['km'] or prefs['baseline'];phase,weeks=_phase(race,ws)
+    recovery=_block_recovery(c,ws,phase)
+    factor={'gradual':1.01,'steady':1.025,'progressive':1.04}.get(prefs['volume'],1.025)
+    if ev['trend']=='reduziert':factor=min(factor,.96)
+    if phase=='specific':factor+=.01
+    elif phase=='peak':factor+=.015
+    elif phase=='taper':factor={2:.72,1:.52}.get(weeks,.45)
+    elif phase=='race':factor=.42
+    if recovery:factor=.84;phase='recovery'
+    ceiling=82 if float(race['distance_km'])>=40 else 66 if float(race['distance_km'])>=20 else 54
+    ceiling=max(ceiling,base*1.04) # established athletes are not forced below their history
+    return max(14,min(ceiling,base*factor)),phase
+
+def _long_run(c,race,ws,phase,total):
+    dist=float(race['distance_km']);p=_prefs(c,dist);h=long_run_history(c,ws);recent=h['longest_4w'] or h['longest_8w']; normal=total*min(.38,p['max_share'])
+    if dist<40:return min(p['max_long'],24 if dist>=20 else 18,max(9,normal)),'easy','Ruhiger langer Lauf.'
+    if phase=='race':return dist,'race','Zielwettkampf.'
+    if phase=='taper':return min(p['max_long'],max(14,total*.34)),'taper','Reduzierter Long Run für Frische bei erhaltener Ausdauer.'
+    if phase=='recovery':return min(p['max_long'],max(16,recent*.78 if recent else normal*.8)),'recovery','Bewusst reduzierter Long Run nach dem Belastungsblock.'
+    safe_history=min(p['max_long'],(recent+3 if recent else normal))
+    if phase=='peak' and total>=58 and h['ge28']>=2 and p['max_long']>=30:
+        km=min(p['max_long'],35,max(30,min(safe_history,total*.50)));kind='peak'
+    elif phase in {'specific','peak'} and h['ge24']>=2:
+        km=min(safe_history,max(normal,recent));kind='mp_blocks' if ((date.fromisoformat(race['race_date'])-ws).days//7)%2==0 else 'mp_finish'
+    elif recent>=18:
+        km=min(safe_history,max(normal,recent));kind='progressive' if phase=='specific' else 'easy'
+    else:km=min(safe_history,max(14,normal));kind='easy'
+    reasons=f"{round(km):g} km aus {h['longest_8w']:g} km längstem Lauf und {round(total):g} km geplantem Wochenumfang."
+    return km,kind,reasons
+
+def _templates(c,race,ws,phase,total):
+    dist=float(race['distance_km']);p=_prefs(c,dist);long_km,kind,reason=_long_run(c,race,ws,phase,total)
+    hard_long=kind in {'progressive','mp_finish','mp_blocks'}
+    idx=((date.fromisoformat(race['race_date'])-ws).days//7)%4
+    if hard_long: qt,qd,qz,qr='Kurze Schwellenreize','2 km locker, 4 × 5 min kontrolliert zügig mit 2 min Trabpause, auslaufen.','threshold','6–7/10'
+    elif phase in {'specific','peak'} and idx in {0,2}: qt,qd,qz,qr='Marathon-Pace','2 km locker, kontrollierter Abschnitt in Marathonpace, locker auslaufen.','goal','6–7/10'
+    elif idx==1:qt,qd,qz,qr='Cruise-Intervalle','2 km locker, 5 × 1,5 km an der Schwelle mit kurzer Trabpause, auslaufen.','threshold','7/10'
+    elif idx==2:qt,qd,qz,qr='Kontinuierlicher Tempolauf','2 km locker, 25–35 min kontrolliert an der Schwelle, auslaufen.','threshold','7/10'
+    else:qt,qd,qz,qr='Schwellenintervalle','2 km locker, 3 × 3 km kontrolliert an der Schwelle, 2 min Trabpause, auslaufen.','threshold','7–8/10'
+    if phase=='race':return [('easy','Locker + Strides',6,'easy','2–3/10','Frische','Locker + 4 Steigerungen.'),('raceprep','Race-Pace Aktivierung',5,'goal','5/10','Aktivierung','Kurze Zielpace-Reize.'),('easy','Shakeout',4,'easy','1–2/10','Frische','Sehr locker.'),('race','Wettkampf',dist,'goal','Wettkampf','Zielwettkampf','Kontrolliert eröffnen.')]
+    quality=max(7,total*(.16 if hard_long else .21)); easy1=max(5,total*.19);easy2=max(5,total-long_km-quality-easy1)
+    long_text={'easy':'Ruhig und gesprächsfähig; Fueling üben.','progressive':'Überwiegend locker, den Schluss kontrolliert moderat laufen.','mp_finish':'Überwiegend locker, finalen Abschnitt kontrolliert in Marathonpace.','mp_blocks':'Lockere Abschnitte mit einfachen Marathonpace-Blöcken; nicht schneller.','peak':'Langer, überwiegend lockerer Ausdauerlauf; Fueling vollständig proben.','recovery':'Bewusst locker und reduziert.','taper':'Locker, kurz und frisch beenden.'}.get(kind,'Locker laufen.')
+    return [('easy','Easy Run',easy1,'easy','2–3/10','Aerobe Basis','Locker; bei Hitze, Hügeln oder Müdigkeit hat RPE Vorrang.'),('quality',qt,quality,qz,qr,'Qualität ohne Überlastung',qd),('easy','Easy Run',easy2,'easy','2–3/10','Lockerer Umfang','Locker laufen.'),('long','Long Run',long_km,'goal' if hard_long and kind!='progressive' else 'easy','6/10' if hard_long else '3–4/10','Marathon-Ausdauer',long_text+' '+reason)]
 
 def _wdict(r):
     d=dict(r);d['details']=json.loads(d.pop('details_json','{}'));d['pace_text']=None
     if d.get('pace_low_s_per_km') and d.get('pace_high_s_per_km'):d['pace_text']=f"{pace_text(d['pace_low_s_per_km']).replace('/km','')}–{pace_text(d['pace_high_s_per_km'])}"
     return d
 
+def mark_plan_stale(c,reason):
+    if c.execute("SELECT 1 FROM workouts WHERE status='planned' AND scheduled_date>=? LIMIT 1",(date.today().isoformat(),)).fetchone():
+        from db import set_setting
+        set_setting(c,'plan_stale',True);set_setting(c,'plan_stale_reason',reason)
+
+def plan_basis(c,ws,race,total,phase):
+    ev=established_volume(c,ws);lh=long_run_history(c,ws);weeks=max(0,(date.fromisoformat(race['race_date'])-ws).days//7)
+    return {'established_weekly_km':ev['km'] or _prefs(c,float(race['distance_km']))['baseline'],'trend':ev['trend'],'longest_recent_km':lh['longest_8w'],'phase':phase,'weeks_to_race':weeks,'planned_weekly_km':round(total,1),'current_partial_km':ev['current_partial_km']}
+
 def generate_week(c,ws:date|None=None,force=False):
-    ws=week_start_for(ws or date.today());key=ws.isoformat()
-    existing=c.execute("SELECT * FROM workouts WHERE week_start=? ORDER BY scheduled_date",(key,)).fetchall()
-    native=c.execute("SELECT * FROM workouts WHERE origin_week_start=? ORDER BY scheduled_date",(key,)).fetchall()
-    # A workout moved in from a neighbouring week must not prevent creation of the
-    # four native sessions of this week. origin_week_start keeps that distinction.
+    ws=week_start_for(ws or date.today());key=ws.isoformat();existing=c.execute("SELECT * FROM workouts WHERE week_start=? ORDER BY scheduled_date",(key,)).fetchall();native=c.execute("SELECT * FROM workouts WHERE origin_week_start=? ORDER BY scheduled_date",(key,)).fetchall()
     if native and not force:return [_wdict(r) for r in existing]
     race=current_race(c)
     if not race:return [_wdict(r) for r in existing]
-    if force and native:
-        # Never destroy completed/skipped sessions or an explicit cross-week move.
-        if any(r['status']!='planned' or r['week_start']!=key for r in native):return [_wdict(r) for r in existing]
-        c.execute("DELETE FROM workouts WHERE origin_week_start=?",(key,));c.execute("DELETE FROM plan_reviews WHERE week_start=?",(key,))
-    days=sorted(set(int(x) for x in get_setting(c,'training_days',[1,3,4,6]) if 0<=int(x)<=6));days=days if len(days)==4 else [1,3,4,6]
-    total,phase=_weekly_target(c,race,ws);zones=_zones(c,race);templates=_templates(c,float(race['distance_km']),phase,total);dates=[ws+timedelta(days=d) for d in days];race_date=date.fromisoformat(race['race_date'])
-    if phase=='race' and ws<=race_date<=ws+timedelta(days=6):dates=sorted([d for d in dates if d<race_date])[-3:]+[race_date]
+    if force:
+        # Only untouched, future, planned generated rows are replaceable.
+        c.execute("DELETE FROM workouts WHERE origin_week_start=? AND scheduled_date>=? AND status='planned' AND linked_run_id IS NULL AND COALESCE(manual_override,0)=0",(key,date.today().isoformat()))
+        c.execute("DELETE FROM plan_reviews WHERE week_start=?",(key,))
+    protected=c.execute("SELECT * FROM workouts WHERE origin_week_start=?",(key,)).fetchall()
+    if protected and not force:return [_wdict(r) for r in existing]
+    total,phase=_weekly_target(c,race,ws);zones=_zones(c,race);templates=_templates(c,race,ws,phase,total);days=sorted(set(int(x) for x in get_setting(c,'training_days',[1,3,4,6]) if 0<=int(x)<=6));days=days if len(days)==4 else [1,3,4,6];dates=[ws+timedelta(days=d) for d in days]
+    occupied={r['scheduled_date'] for r in c.execute("SELECT scheduled_date FROM workouts WHERE scheduled_date BETWEEN ? AND ?",(key,(ws+timedelta(days=6)).isoformat()))}
+    generation=datetime.now(timezone.utc).isoformat()
     for scheduled,t in zip(dates,templates):
-        typ,title,km,zone,rpe,purpose,instructions=t;low,high=zones.get(zone,(None,None));details={'purpose':purpose,'instructions':instructions,'phase':phase,'week_target_km':round(total,1),'rpe_target':rpe,'evidence_note':'Planheuristik: überwiegend lockerer Umfang, getrennte Belastungsspitzen, konservative Progression und Wettkampfspezifität. RPE darf bei Hitze, Höhenprofil oder ungewöhnlicher Müdigkeit Pace-Vorgaben übersteuern.'}
-        c.execute("INSERT INTO workouts(week_start,origin_week_start,scheduled_date,workout_type,title,distance_km,pace_low_s_per_km,pace_high_s_per_km,details_json,status) VALUES(?,?,?,?,?,?,?,?,?, 'planned')",(key,key,scheduled.isoformat(),typ,title,round(km,1),low,high,json.dumps(details,ensure_ascii=False)))
-    return [_wdict(r) for r in c.execute("SELECT * FROM workouts WHERE week_start=? ORDER BY scheduled_date",(ws.isoformat(),)).fetchall()]
+        typ,title,km,zone,rpe,purpose,instructions=t;low,high=zones.get(zone,(None,None));details={'purpose':purpose,'instructions':instructions,'phase':phase,'week_target_km':round(total,1),'rpe_target':rpe,'plan_basis':plan_basis(c,ws,race,total,phase)}
+        c.execute("INSERT INTO workouts(week_start,origin_week_start,scheduled_date,workout_type,title,distance_km,pace_low_s_per_km,pace_high_s_per_km,details_json,status,manual_override,modified_by,generation_version,plan_generation_id) VALUES(?,?,?,?,?,?,?,?,?,'planned',0,'engine','0.1.7',?)",(key,key,scheduled.isoformat(),typ,title,round(km,1),low,high,json.dumps(details,ensure_ascii=False),generation))
+    if force:
+        from db import set_setting
+        set_setting(c,'plan_stale',False);set_setting(c,'plan_stale_reason','')
+    return [_wdict(r) for r in c.execute("SELECT * FROM workouts WHERE week_start=? ORDER BY scheduled_date",(key,)).fetchall()]
+
+def refresh_plan(c,start:date|None=None,weeks=4):
+    start=week_start_for(start or date.today());old=[]
+    for i in range(weeks):
+        ws=start+timedelta(days=7*i); rows0=[_wdict(r) for r in c.execute("SELECT * FROM workouts WHERE week_start=?",(ws.isoformat(),))];old+=rows0;generate_week(c,ws,True)
+    new=[]
+    for i in range(weeks):new += [_wdict(r) for r in c.execute("SELECT * FROM workouts WHERE week_start=?",((start+timedelta(days=7*i)).isoformat(),))]
+    def stats(xs):return (round(sum(float(x['distance_km']) for x in xs),1),max([float(x['distance_km']) for x in xs if x['workout_type']=='long'] or [0]),next((x['title'] for x in xs if x['workout_type']=='quality'),None))
+    a,b=stats(old),stats(new);diff={};
+    if a[0]!=b[0]:diff['volume_km']={'old':a[0],'new':b[0]}
+    if a[1]!=b[1]:diff['long_run_km']={'old':a[1],'new':b[1]}
+    if a[2]!=b[2]:diff['quality']={'old':a[2],'new':b[2]}
+    return {'updated':bool(diff),'diff':diff,'weeks':weeks}
 
 def move_workout(c,wid:int,new:date):
     r=c.execute("SELECT * FROM workouts WHERE id=?",(wid,)).fetchone()
     if not r:raise KeyError('Workout nicht gefunden')
-    if r['status']!='planned':raise ValueError('Nur geplante, noch offene Einheiten können verschoben werden.')
-    old=date.fromisoformat(r['scheduled_date'])
-    if new==old:return {'workout':_wdict(r),'warnings':[],'operation':'unchanged'}
-    if abs((week_start_for(new)-week_start_for(old)).days)>7:raise ValueError('Ein Training kann höchstens in die vorherige oder nächste Woche verschoben werden.')
-    targets=c.execute("SELECT * FROM workouts WHERE id!=? AND scheduled_date=?",(wid,new.isoformat())).fetchall()
-    if len(targets)>1:raise ValueError('Auf dem Zieltag liegen mehrere Einheiten; ein Tausch ist nicht eindeutig.')
-    target=targets[0] if targets else None
-    if target and target['status']!='planned':raise ValueError('Auf eine absolvierte oder ausgefallene Einheit kann nicht getauscht werden.')
-    warnings=[];hard={'quality','long','race','raceprep'}
-    if r['workout_type'] in hard:
-        for o in c.execute("SELECT * FROM workouts WHERE id!=? AND scheduled_date BETWEEN ? AND ?",(wid,(new-timedelta(days=1)).isoformat(),(new+timedelta(days=1)).isoformat())).fetchall():
-            if o['workout_type'] in hard:warnings.append('Zwei belastende Einheiten liegen nun direkt nebeneinander. Prüfe Erholung und Wochenstruktur.');break
-    new_ws=week_start_for(new)
+    if r['status']!='planned':raise ValueError('Nur geplante Einheiten können verschoben werden.')
+    old=date.fromisoformat(r['scheduled_date']);targets=c.execute("SELECT * FROM workouts WHERE id!=? AND scheduled_date=?",(wid,new.isoformat())).fetchall();target=targets[0] if len(targets)==1 else None
+    if target and target['status']!='planned':raise ValueError('Auf eine absolvierte Einheit kann nicht getauscht werden.')
     if target:
-        # Both updates share the caller's transaction. A temporary date avoids
-        # ambiguity should a future schema add a unique scheduled-date index.
-        temporary=f"0001-01-{wid % 28 + 1:02d}"
-        c.execute("UPDATE workouts SET scheduled_date=? WHERE id=?",(temporary,wid))
-        c.execute("UPDATE workouts SET scheduled_date=?,week_start=? WHERE id=?",(old.isoformat(),week_start_for(old).isoformat(),target['id']))
-        c.execute("UPDATE workouts SET scheduled_date=?,week_start=? WHERE id=?",(new.isoformat(),new_ws.isoformat(),wid))
-    else:c.execute("UPDATE workouts SET scheduled_date=?,week_start=? WHERE id=?",(new.isoformat(),new_ws.isoformat(),wid))
-    c.execute("DELETE FROM plan_reviews WHERE week_start IN (?,?)",(r['week_start'],new_ws.isoformat()))
-    return {'workout':_wdict(c.execute("SELECT * FROM workouts WHERE id=?",(wid,)).fetchone()),'warnings':warnings,'operation':'swap' if target else 'move'}
+        c.execute("UPDATE workouts SET scheduled_date=?,week_start=?,manual_override=1,modified_by='user' WHERE id=?",(old.isoformat(),week_start_for(old).isoformat(),target['id']))
+    c.execute("UPDATE workouts SET scheduled_date=?,week_start=?,manual_override=1,modified_by='user' WHERE id=?",(new.isoformat(),week_start_for(new).isoformat(),wid))
+    return {'workout':_wdict(c.execute("SELECT * FROM workouts WHERE id=?",(wid,)).fetchone()),'warnings':[],'operation':'swap' if target else 'move'}
 
 def auto_match_run(c,run_id):
-    r=c.execute("SELECT * FROM runs WHERE id=?",(run_id,)).fetchone()
-    if not r:return None
-    day=parse_dt(r['started_at']).date().isoformat();cands=c.execute("SELECT * FROM workouts WHERE scheduled_date=? AND status='planned'",(day,)).fetchall()
-    if not cands:return None
-    w=min(cands,key=lambda x:abs(float(x['distance_km'])-float(r['distance_km'])));c.execute("UPDATE workouts SET status='completed',linked_run_id=? WHERE id=?",(run_id,w['id']));return int(w['id'])
+    r=c.execute("SELECT * FROM runs WHERE id=?",(run_id,)).fetchone();day=parse_dt(r['started_at']).date().isoformat() if r else '' ;w=c.execute("SELECT * FROM workouts WHERE scheduled_date=? AND status='planned' ORDER BY ABS(distance_km-?) LIMIT 1",(day,float(r['distance_km']) if r else 0)).fetchone()
+    if not w:return None
+    c.execute("UPDATE workouts SET status='completed',linked_run_id=? WHERE id=?",(run_id,w['id']));return int(w['id'])
 
 def guardrails(c,workouts):
     planned=sum(float(w['distance_km']) for w in workouts);long_km=sum(float(w['distance_km']) for w in workouts if w['workout_type'] in {'long','race'});share=long_km/planned if planned else 0;cap=float(get_setting(c,'max_long_run_share',.45));alerts=[]
-    if share>cap+.015 and not any(w['workout_type']=='race' for w in workouts):alerts.append({'level':'warn','text':f'Longrun-Anteil {share:.0%} liegt über deinem Guardrail von {cap:.0%}.'})
-    hard_dates=sorted(date.fromisoformat(w['scheduled_date']) for w in workouts if w['workout_type'] in {'quality','long','raceprep','race'})
-    if any((b-a).days<=1 for a,b in zip(hard_dates,hard_dates[1:])):alerts.append({'level':'warn','text':'Belastende Einheiten liegen an aufeinanderfolgenden Tagen.'})
-    skipped=sum(w['status']=='skipped' for w in workouts)
-    if skipped>=2:alerts.append({'level':'info','text':'Mehrere Einheiten sind ausgefallen; eine adaptive Wochenprüfung ist sinnvoll.'})
-    low=sum(float(w['distance_km']) for w in workouts if w['workout_type'] in {'easy','long'})/planned if planned else 0
-    return {'long_run_share':round(share,3),'long_run_share_cap':round(cap,3),'low_intensity_distance_share':round(low,3),'hard_sessions':sum(w['workout_type'] in {'quality','raceprep','race'} for w in workouts),'skipped_sessions':skipped,'alerts':alerts,'needs_review':bool(alerts)}
+    if share>cap+.015 and not any(w['workout_type']=='race' for w in workouts):alerts.append({'level':'info','text':f'Longrun-Anteil {share:.0%} über dem üblichen Guardrail; lockerer Restumfang wurde angepasst.'})
+    hard=sum(w['workout_type'] in {'quality','raceprep','race'} or (w['workout_type']=='long' and (w.get('details') or {}).get('rpe_target')=='6/10') for w in workouts)
+    return {'long_run_share':round(share,3),'long_run_share_cap':round(cap,3),'low_intensity_distance_share':round(sum(float(w['distance_km']) for w in workouts if w['workout_type'] in {'easy','long'})/planned,3) if planned else 0,'hard_sessions':hard,'skipped_sessions':sum(w['status']=='skipped' for w in workouts),'alerts':alerts,'needs_review':bool(alerts)}
 
 def week_summary(c,ws):
-    workouts=generate_week(c,ws);planned=sum(float(w['distance_km']) for w in workouts);completed=sum(float(w['distance_km']) for w in workouts if w['status']=='completed');actual=float(c.execute("SELECT COALESCE(SUM(distance_km),0) km FROM runs WHERE started_at>=? AND started_at<?",(ws.isoformat(),(ws+timedelta(days=7)).isoformat())).fetchone()['km'] or 0)
-    return {'week_start':ws.isoformat(),'week_end':(ws+timedelta(days=6)).isoformat(),'workouts':workouts,'planned_km':round(planned,1),'completed_planned_km':round(completed,1),'actual_km':round(actual,1),'guardrails':guardrails(c,workouts)}
+    workouts=generate_week(c,ws);planned=sum(float(w['distance_km']) for w in workouts);race=current_race(c);total,phase=_weekly_target(c,race,ws) if race else (planned,'build');basis=plan_basis(c,ws,race,total,phase) if race else None
+    actual=float(c.execute("SELECT COALESCE(SUM(distance_km),0) km FROM runs WHERE started_at>=? AND started_at<?",(ws.isoformat(),(ws+timedelta(days=7)).isoformat())).fetchone()['km'] or 0)
+    return {'week_start':ws.isoformat(),'week_end':(ws+timedelta(days=6)).isoformat(),'workouts':workouts,'planned_km':round(planned,1),'completed_planned_km':round(sum(float(w['distance_km']) for w in workouts if w['status']=='completed'),1),'actual_km':round(actual,1),'guardrails':guardrails(c,workouts),'plan_basis':basis,'plan_stale':bool(get_setting(c,'plan_stale',False)),'plan_stale_reason':get_setting(c,'plan_stale_reason','')}
 
 def dashboard(c):
     race=current_race(c);today=date.today();week=week_summary(c,week_start_for(today)) if race else {'workouts':[],'planned_km':0,'actual_km':0};n=next((w for w in week['workouts'] if w['status']=='planned' and w['scheduled_date']>=today.isoformat()),None)
-    if not n and race:n=next((w for w in week_summary(c,week_start_for(today)+timedelta(days=7))['workouts'] if w['status']=='planned'),None)
     return {'today':today.isoformat(),'race':dict(race) if race else None,'assessment':goal_assessment(c,race) if race else None,'next_workout':n,'week':week,'profile':performance_profile(c,race),'pending_suggestions':c.execute("SELECT COUNT(*) n FROM suggestions WHERE status='pending'").fetchone()['n']}

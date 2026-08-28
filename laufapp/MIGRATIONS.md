@@ -31,3 +31,7 @@ Die Migration 1 → 2 ist additiv und löscht keine bestehenden Tabellen oder Nu
 7. finale Datenbank auf Integrität prüfen.
 
 Schlägt Schritt 5–7 fehl, wird aus der Sicherung wiederhergestellt und der App-Start abgebrochen.
+
+## Schema 4 – ab v0.1.7
+
+Ergänzt additive Workout-Metadaten `manual_override`, `modified_by`, `generation_version` und `plan_generation_id`. Bestehende Workouts gelten weiterhin als Engine-Einheiten; Status, Verknüpfungen und sämtliche Nutzerdaten bleiben erhalten. Die Migration 3 → 4 verwendet den bestehenden Backup-, Integritäts- und Rollback-Ablauf.

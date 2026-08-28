@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 from db import APP_VERSION, adopt_repository_transfer_if_needed, data_dir, db_conn, get_setting, init_db, prepare_repository_transfer, rows, set_setting
-from training import current_race, dashboard, generate_week, goal_assessment, hms, move_workout, parse_dt, predict_all, predict_distance, week_start_for, week_summary, auto_match_run
+from training import current_race, dashboard, generate_week, goal_assessment, hms, move_workout, parse_dt, predict_all, predict_distance, week_start_for, week_summary, auto_match_run, mark_plan_stale, refresh_plan
 from health_import import import_apple_health
 from import_jobs import MANAGER, create_import_job_with_uuid, get_job, import_storage_path, latest_job, list_jobs, retry_job
 from coach import analyze_run, coach_chat, config_status, extract_run_image, get_plan_review, month_cost, review_week_plan
@@ -157,6 +157,12 @@ def api_plan(start:date|None=Query(default=None),force:bool=False):
     with db_conn() as c:
         if not current_race(c):raise HTTPException(400,'Lege zuerst einen aktiven Wettkampf an.')
         return {'workouts':generate_week(c,week_start_for(start or date.today()),force)}
+@app.post('/api/plan/refresh')
+def api_plan_refresh(start:date|None=Query(default=None),weeks:int=Query(default=4,ge=1,le=12)):
+    with db_conn() as c:
+        if not current_race(c):raise HTTPException(400,'Lege zuerst einen aktiven Wettkampf an.')
+        return refresh_plan(c,start,weeks)
+
 @app.get('/api/plan/review')
 def api_review_get(start:date|None=Query(default=None)):
     ws=week_start_for(start or date.today())
@@ -176,7 +182,7 @@ def api_move(wid:int,p:MovePayload):
 def api_status(wid:int,p:StatusPayload):
     with db_conn() as c:
         if not c.execute("SELECT id FROM workouts WHERE id=?",(wid,)).fetchone():raise HTTPException(404,'Training nicht gefunden.')
-        c.execute("UPDATE workouts SET status=? WHERE id=?",(p.status,wid));return {'ok':True}
+        c.execute("UPDATE workouts SET status=?,manual_override=1,modified_by='user' WHERE id=?",(p.status,wid));return {'ok':True}
 @app.get('/api/races')
 def api_races():
     with db_conn() as c:return rows(c.execute("SELECT * FROM races ORDER BY active DESC,race_date").fetchall())
@@ -186,7 +192,7 @@ def api_race_add(p:RacePayload):
     with db_conn() as c:
         if p.active:c.execute("UPDATE races SET active=0")
         cur=c.execute("INSERT INTO races(name,distance_km,race_date,goal_seconds,target_source,active) VALUES(?,?,?,?, 'user',?)",(p.name,p.distance_km,p.race_date.isoformat(),p.goal_seconds,int(p.active)))
-        if p.active:generate_week(c,week_start_for(date.today()),True)
+        if p.active:mark_plan_stale(c,'Aktiver Wettkampf geändert')
         return {'id':int(cur.lastrowid)}
 @app.post('/api/races/{rid}/adopt-prediction')
 def api_adopt(rid:int):
@@ -195,7 +201,7 @@ def api_adopt(rid:int):
         if not r:raise HTTPException(404,'Wettkampf nicht gefunden.')
         p=predict_distance(c,float(r['distance_km']))
         if not p:raise HTTPException(400,'Noch keine belastbare Prognose vorhanden.')
-        c.execute("UPDATE races SET goal_seconds=?,target_source='prediction' WHERE id=?",(p['predicted_seconds'],rid));return {'ok':True,'goal_seconds':p['predicted_seconds'],'goal_time':p['predicted_time']}
+        c.execute("UPDATE races SET goal_seconds=?,target_source='prediction' WHERE id=?",(p['predicted_seconds'],rid));mark_plan_stale(c,'Zielzeit oder Prognose geändert');return {'ok':True,'goal_seconds':p['predicted_seconds'],'goal_time':p['predicted_time']}
 @app.get('/api/predictions')
 def api_predictions():
     with db_conn() as c:
@@ -296,7 +302,9 @@ async def api_health_import(file:UploadFile=File(...)):
         with db_conn() as c:
             try:r=import_apple_health(c,tmp,24)
             except ValueError as e:raise HTTPException(400,str(e)) from e
-            snapshot(c,'apple_health_import');r['health_summary']=health_summary(c);r['predictions']=predict_all(c);return r
+            snapshot(c,'apple_health_import');
+            if r.get('runs_added',0):mark_plan_stale(c,'Neue Apple-Health-Läufe verfügbar')
+            r['health_summary']=health_summary(c);r['predictions']=predict_all(c);return r
     finally:await file.close();tmp.unlink(missing_ok=True)
 
 @app.get('/api/runs/{rid}/details')
@@ -332,7 +340,7 @@ def api_suggestion_accept(sid:int):
         if 'distance_km' in changes:
             proposed=float(changes['distance_km']);cur=float(w['distance_km'])
             if not max(3,cur*.5)<=proposed<=cur*1.1:raise HTTPException(400,'Distanzänderung verletzt die Sicherheitsgrenzen.')
-            c.execute("UPDATE workouts SET distance_km=? WHERE id=?",(round(proposed,1),wid))
+            c.execute("UPDATE workouts SET distance_km=?,manual_override=1,modified_by='coach' WHERE id=?",(round(proposed,1),wid))
         if 'scheduled_date' in changes:
             try:warnings+=move_workout(c,wid,date.fromisoformat(changes['scheduled_date']))['warnings']
             except (KeyError,ValueError) as e:raise HTTPException(400,str(e)) from e
@@ -380,7 +388,7 @@ def api_settings_patch(p:SettingsPayload):
         vals=p.model_dump(exclude_none=True)
         for k,v in vals.items():set_setting(c,k,v)
         plan_keys={'training_days','training_volume_profile','training_difficulty','baseline_weekly_km','max_long_run_km','max_long_run_share'}
-        if plan_keys.intersection(vals) and current_race(c):generate_week(c,week_start_for(date.today()),True)
+        if plan_keys.intersection(vals) and current_race(c):mark_plan_stale(c,'Trainingspräferenzen geändert')
         return settings_dict(c)
 @app.get('/api/ai-usage')
 def api_usage():
