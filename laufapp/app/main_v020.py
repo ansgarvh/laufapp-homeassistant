@@ -103,6 +103,19 @@ def _validate_race_week(c, race_date: date, exclude_id: int | None = None) -> No
         )
 
 
+def _refresh_b_week(c, race_date: date) -> None:
+    """Apply/remove a B-race only in its own still-future training week.
+
+    This deliberately does not mark the whole plan stale: a B-race must not
+    alter the preceding training block. generate_week(force=True) still keeps
+    completed/manual/protected workouts authoritative.
+    """
+    ws = legacy.week_start_for(race_date)
+    if ws + timedelta(days=6) < date.today():
+        return
+    training.generate_week(c, ws, True)
+
+
 def _race_dict(c, r) -> dict:
     d = dict(r)
     d["priority"] = training.race_priority(c, int(r["id"]))
@@ -127,9 +140,7 @@ def api_v2_races():
     with db_conn() as c:
         return [
             _race_dict(c, r)
-            for r in c.execute(
-                "SELECT * FROM races ORDER BY race_date,id"
-            ).fetchall()
+            for r in c.execute("SELECT * FROM races ORDER BY race_date,id").fetchall()
         ]
 
 
@@ -161,7 +172,10 @@ def api_v2_race_add(p: RaceCreate):
         )
         rid = int(cur.lastrowid)
         _set_priority(c, rid, p.priority)
-        legacy.mark_plan_stale(c, "Wettkampfplanung geändert")
+        if p.priority == "A":
+            legacy.mark_plan_stale(c, "A-Wettkampfplanung geändert")
+        else:
+            _refresh_b_week(c, p.race_date)
         return _race_dict(c, c.execute("SELECT * FROM races WHERE id=?", (rid,)).fetchone())
 
 
@@ -170,8 +184,11 @@ def api_v2_race_update(rid: int, p: RaceUpdate):
     if p.race_date <= date.today():
         raise HTTPException(400, "Das Wettkampfdatum muss in der Zukunft liegen.")
     with db_conn() as c:
-        if not c.execute("SELECT id FROM races WHERE id=?", (rid,)).fetchone():
+        old = c.execute("SELECT * FROM races WHERE id=?", (rid,)).fetchone()
+        if not old:
             raise HTTPException(404, "Wettkampf nicht gefunden.")
+        old_priority = training.race_priority(c, rid)
+        old_date = date.fromisoformat(old["race_date"])
         _validate_race_week(c, p.race_date, rid)
         c.execute(
             "UPDATE races SET name=?,distance_km=?,race_date=?,goal_seconds=?,target_source='user',active=1 "
@@ -179,7 +196,19 @@ def api_v2_race_update(rid: int, p: RaceUpdate):
             (p.name, p.distance_km, p.race_date.isoformat(), p.goal_seconds, rid),
         )
         _set_priority(c, rid, p.priority)
-        legacy.mark_plan_stale(c, "Wettkampfplanung geändert")
+
+        # Pure B->B edits remain local. Any transition involving an A-race can
+        # change the governing block and therefore marks the broader plan stale.
+        if old_priority == "B" and p.priority == "B":
+            if old_date != p.race_date:
+                _refresh_b_week(c, old_date)
+            _refresh_b_week(c, p.race_date)
+        else:
+            if old_priority == "B":
+                _refresh_b_week(c, old_date)
+            legacy.mark_plan_stale(c, "A-Wettkampfplanung geändert")
+            if p.priority == "B":
+                _refresh_b_week(c, p.race_date)
         return _race_dict(c, c.execute("SELECT * FROM races WHERE id=?", (rid,)).fetchone())
 
 
@@ -189,9 +218,14 @@ def api_v2_race_delete(rid: int):
         r = c.execute("SELECT * FROM races WHERE id=?", (rid,)).fetchone()
         if not r:
             raise HTTPException(404, "Wettkampf nicht gefunden.")
+        priority = training.race_priority(c, rid)
+        race_date = date.fromisoformat(r["race_date"])
         c.execute("DELETE FROM races WHERE id=?", (rid,))
         _remove_priority(c, rid)
-        legacy.mark_plan_stale(c, "Wettkampfplanung geändert")
+        if priority == "A":
+            legacy.mark_plan_stale(c, "A-Wettkampfplanung geändert")
+        else:
+            _refresh_b_week(c, race_date)
         return {"ok": True}
 
 
