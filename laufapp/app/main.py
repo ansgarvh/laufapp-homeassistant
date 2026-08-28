@@ -7,9 +7,9 @@ from typing import Any, Literal
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from db import APP_VERSION, adopt_repository_transfer_if_needed, data_dir, db_conn, get_setting, init_db, prepare_repository_transfer, rows, set_setting
-from training import current_race, dashboard, generate_week, goal_assessment, hms, move_workout, parse_dt, predict_all, predict_distance, week_start_for, week_summary, auto_match_run, mark_plan_stale, refresh_plan
+from training import automatic_max_weekly_km, current_race, dashboard, generate_week, goal_assessment, hms, move_workout, parse_dt, predict_all, predict_distance, week_start_for, week_summary, auto_match_run, mark_plan_stale, refresh_plan
 from health_import import import_apple_health
 from import_jobs import MANAGER, create_import_job_with_uuid, get_job, import_storage_path, latest_job, list_jobs, retry_job
 from coach import analyze_run, coach_chat, config_status, extract_run_image, get_plan_review, month_cost, review_week_plan
@@ -62,7 +62,7 @@ class SetupPayload(BaseModel):
     @classmethod
     def days(cls,v):
         x=sorted(set(v))
-        if len(x)!=4 or any(i<0 or i>6 for i in x):raise ValueError('Genau vier unterschiedliche Trainingstage auswählen.')
+        if not 3<=len(x)<=7 or any(i<0 or i>6 for i in x):raise ValueError('Bitte drei bis sieben unterschiedliche Trainingstage auswählen.')
         return x
 class RacePayload(BaseModel):
     name:str=Field(min_length=1,max_length=120);distance_km:float=Field(gt=1,le=100);race_date:date;goal_seconds:int=Field(gt=300,le=24*3600);active:bool=True
@@ -83,14 +83,20 @@ class MovePayload(BaseModel):scheduled_date:date
 class StatusPayload(BaseModel):status:Literal['planned','completed','skipped']
 class CoachPayload(BaseModel):message:str=Field(min_length=1,max_length=6000)
 class SettingsPayload(BaseModel):
-    training_days:list[int]|None=None;training_volume_profile:Literal['gradual','steady','progressive']|None=None;training_difficulty:Literal['comfortable','balanced','challenging']|None=None;baseline_weekly_km:float|None=Field(default=None,ge=8,le=160);max_long_run_km:float|None=Field(default=None,ge=8,le=50);max_long_run_share:float|None=Field(default=None,ge=.30,le=.60);monthly_ai_budget_eur:float|None=Field(default=None,ge=.5,le=100);coach_model:Literal['gpt-5.6-luna','gpt-5.6-terra','gpt-5.6-sol']|None=None;vision_model:Literal['gpt-5.6-luna','gpt-5.6-terra']|None=None;evidence_search:bool|None=None
+    training_days:list[int]|None=None;quality_sessions_per_week:int|None=Field(default=None,ge=1,le=3);max_weekly_km_mode:Literal['auto','user']|None=None;max_weekly_km:float|None=Field(default=None,ge=10,le=180);training_volume_profile:Literal['gradual','steady','progressive']|None=None;training_difficulty:Literal['comfortable','balanced','challenging']|None=None;baseline_weekly_km:float|None=Field(default=None,ge=8,le=160);max_long_run_km:float|None=Field(default=None,ge=8,le=50);max_long_run_share:float|None=Field(default=None,ge=.30,le=.60);monthly_ai_budget_eur:float|None=Field(default=None,ge=.5,le=100);coach_model:Literal['gpt-5.6-luna','gpt-5.6-terra','gpt-5.6-sol']|None=None;vision_model:Literal['gpt-5.6-luna','gpt-5.6-terra']|None=None;evidence_search:bool|None=None
     @field_validator('training_days')
     @classmethod
     def days(cls,v):
         if v is None:return v
         x=sorted(set(v))
-        if len(x)!=4 or any(i<0 or i>6 for i in x):raise ValueError('Es müssen genau vier unterschiedliche Trainingstage gewählt werden.')
+        if not 3<=len(x)<=7 or any(i<0 or i>6 for i in x):raise ValueError('Es müssen drei bis sieben unterschiedliche Trainingstage gewählt werden.')
         return x
+
+    @model_validator(mode='after')
+    def safe_quality(self):
+        if self.training_days is not None and self.quality_sessions_per_week is not None and self.quality_sessions_per_week>len(self.training_days)-2:raise ValueError('Mindestens zwei Lauftage müssen locker beziehungsweise für den Longrun bleiben.')
+        if self.max_weekly_km_mode=='user' and self.max_weekly_km is None:raise ValueError('Für einen selbst festgelegten Wochenumfang fehlt der Kilometerwert.')
+        return self
 
 def health_summary(c):
     out={}
@@ -122,7 +128,10 @@ def progress_volume(c, period:str):
     return {'period':period,'cutoff_date':cutoff.isoformat(),'through_date':today.isoformat(),'weeks':weeks,'total_km':total,'average_weekly_km':round(total/len(weeks),2) if weeks else 0,'maximum_weekly_km':max((x['distance_km'] for x in weeks),default=0),'number_of_weeks':len(weeks),'active_weeks':sum(x['run_count']>0 for x in weeks)}
 def shoe_rows(c):
     return rows(c.execute("SELECT s.id,s.brand,s.model,s.nickname,s.start_km,s.archived,s.created_at,ROUND(s.start_km+COALESCE(SUM(r.distance_km),0),1) total_km,COUNT(r.id) run_count,MAX(r.started_at) last_run FROM shoes s LEFT JOIN runs r ON r.shoe_id=s.id GROUP BY s.id ORDER BY s.archived,s.created_at DESC").fetchall())
-def settings_dict(c):return {'training_days':get_setting(c,'training_days',[1,3,4,6]),'training_volume_profile':get_setting(c,'training_volume_profile','steady'),'training_difficulty':get_setting(c,'training_difficulty','balanced'),'baseline_weekly_km':get_setting(c,'baseline_weekly_km',40.0),'max_long_run_km':get_setting(c,'max_long_run_km',32.0),'max_long_run_share':get_setting(c,'max_long_run_share',.45),'monthly_ai_budget_eur':get_setting(c,'monthly_ai_budget_eur',10.0),'coach_model':get_setting(c,'coach_model','gpt-5.6-terra'),'vision_model':get_setting(c,'vision_model','gpt-5.6-luna'),'evidence_search':get_setting(c,'evidence_search',True),'ai':config_status(c)}
+def settings_dict(c):
+    race=current_race(c);dist=float(race['distance_km']) if race else 42.195;long_default=35 if dist>=40 else 26 if dist>=20 else 18 if dist>=10 else 14;recommendation=automatic_max_weekly_km(c,race)
+    mode=get_setting(c,'max_weekly_km_mode','auto')
+    return {'training_days':get_setting(c,'training_days',[1,3,4,6]),'running_days_per_week':len(get_setting(c,'training_days',[1,3,4,6])),'quality_sessions_per_week':get_setting(c,'quality_sessions_per_week',2),'max_weekly_km_mode':mode,'max_weekly_km':get_setting(c,'max_weekly_km',recommendation) if mode=='user' else recommendation,'recommended_max_weekly_km':recommendation,'training_volume_profile':get_setting(c,'training_volume_profile','steady'),'training_difficulty':get_setting(c,'training_difficulty','balanced'),'baseline_weekly_km':get_setting(c,'baseline_weekly_km',40.0),'max_long_run_km':get_setting(c,'max_long_run_km',long_default),'max_long_run_share':get_setting(c,'max_long_run_share',.45),'monthly_ai_budget_eur':get_setting(c,'monthly_ai_budget_eur',10.0),'coach_model':get_setting(c,'coach_model','gpt-5.6-terra'),'vision_model':get_setting(c,'vision_model','gpt-5.6-luna'),'evidence_search':get_setting(c,'evidence_search',True),'plan_stale':get_setting(c,'plan_stale',False),'plan_stale_reason':get_setting(c,'plan_stale_reason',''),'ai':config_status(c)}
 def bootstrap(c):
     active=current_race(c);return {'version':APP_VERSION,'setup_completed':bool(get_setting(c,'setup_completed',False)),'training_days':get_setting(c,'training_days',[1,3,4,6]),'races':rows(c.execute("SELECT * FROM races ORDER BY active DESC,race_date").fetchall()),'active_race':dict(active) if active else None,'shoes':shoe_rows(c),'health':health_summary(c),'ai':config_status(c)}
 def snapshot(c,source):
@@ -386,9 +395,11 @@ def api_settings():
 def api_settings_patch(p:SettingsPayload):
     with db_conn() as c:
         vals=p.model_dump(exclude_none=True)
+        days=vals.get('training_days',get_setting(c,'training_days',[1,3,4,6]));quality=vals.get('quality_sessions_per_week',get_setting(c,'quality_sessions_per_week',2))
+        if quality>len(days)-2:raise HTTPException(422,'Mindestens zwei Lauftage müssen locker beziehungsweise für den Longrun bleiben.')
         for k,v in vals.items():set_setting(c,k,v)
-        plan_keys={'training_days','training_volume_profile','training_difficulty','baseline_weekly_km','max_long_run_km','max_long_run_share'}
-        if plan_keys.intersection(vals) and current_race(c):mark_plan_stale(c,'Trainingspräferenzen geändert')
+        plan_keys={'training_days','quality_sessions_per_week','max_weekly_km_mode','max_weekly_km','training_volume_profile','training_difficulty','baseline_weekly_km','max_long_run_km','max_long_run_share'}
+        if plan_keys.intersection(vals) and current_race(c):mark_plan_stale(c,'Deine Planungseinstellungen wurden geändert.')
         return settings_dict(c)
 @app.get('/api/ai-usage')
 def api_usage():

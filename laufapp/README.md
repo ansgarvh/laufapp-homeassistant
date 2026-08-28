@@ -1,6 +1,16 @@
-# Laufapp v0.1.7
+# Laufapp v0.1.8
 
 Private, mobile-first Lauf-PWA für Home Assistant OS auf dem Beelink Mini S12. Die App verbindet eine lokale Trainings-/Prognoseengine mit Apple-Health-Daten und einem optionalen OpenAI-Coach. Sie ist für genau einen Nutzer ausgelegt.
+
+
+## Highlights von v0.1.8
+
+- Eigener Bereich **Einstellungen** für 3–7 Lauftage, Wochentage, 1–3 Qualitätseinheiten sowie harte Wochen- und Longrun-Grenzen.
+- Der maximale Wochenumfang arbeitet wahlweise automatisch oder als dauerhaft gespeicherte Nutzergrenze; die automatische Empfehlung ist die robuste Basis abgeschlossener Wochen × 1,10 (Marathon), 1,08 (Halbmarathon) oder 1,06 (kürzere Distanzen), bei erkanntem Detraining zusätzlich × 0,95.
+- Distanzabhängige Longrun-Grenzen: Marathon 35 km, Halbmarathon 26 km, 10 km 18 km und 5 km 14 km.
+- „Plan neu berechnen“ befindet sich zentral in Einstellungen; Änderungen markieren den Plan zunächst nur als veraltet und schützen absolvierte sowie manuell angepasste Einheiten.
+- Die Aktualisierungszusammenfassung vergleicht ausschließlich tatsächliche Planzeilen derselben ausgewählten Kalenderwoche statt mehrerer Zukunftswochen.
+- **Aktuelle Woche** bringt die Wochenansicht direkt zum gegenwärtigen Montag zurück.
 
 ## Highlights von v0.1.7
 

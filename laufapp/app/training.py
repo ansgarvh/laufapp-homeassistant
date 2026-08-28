@@ -106,7 +106,8 @@ def performance_profile(c,race=None):
     return {'Grundlagenausdauer':round(endurance),'Schwelle':round(threshold),'Speed':round(speed),'Marathon-Ausdauer':round(m_end if dist>=40 else (endurance+threshold)/2),'Trainingskonstanz':consistency(c)}
 
 def _prefs(c,dist):
-    return {'volume':get_setting(c,'training_volume_profile','steady'),'difficulty':get_setting(c,'training_difficulty','balanced'),'baseline':max(8,min(160,float(get_setting(c,'baseline_weekly_km',40)))),'max_long':max(8,min(50,float(get_setting(c,'max_long_run_km',32 if dist>=40 else 24)))),'max_share':max(.30,min(.60,float(get_setting(c,'max_long_run_share',.45))))}
+    long_default=35 if dist>=40 else 26 if dist>=20 else 18 if dist>=10 else 14
+    return {'volume':get_setting(c,'training_volume_profile','steady'),'difficulty':get_setting(c,'training_difficulty','balanced'),'baseline':max(8,min(160,float(get_setting(c,'baseline_weekly_km',40)))),'max_long':max(8,min(50,float(get_setting(c,'max_long_run_km',long_default)))),'max_share':max(.30,min(.60,float(get_setting(c,'max_long_run_share',.45)))),'quality':max(1,min(3,int(get_setting(c,'quality_sessions_per_week',2))))}
 
 def established_volume(c,ref:date|None=None):
     """Robust baseline from eight *completed* weeks; the current week is context only."""
@@ -164,7 +165,18 @@ def _weekly_target(c,race,ws):
     if recovery:factor=.84;phase='recovery'
     ceiling=82 if float(race['distance_km'])>=40 else 66 if float(race['distance_km'])>=20 else 54
     ceiling=max(ceiling,base*1.04) # established athletes are not forced below their history
-    return max(14,min(ceiling,base*factor)),phase
+    target=max(14,min(ceiling,base*factor))
+    recommendation=automatic_max_weekly_km(c,race,ws)
+    user_cap=float(get_setting(c,'max_weekly_km',recommendation)) if get_setting(c,'max_weekly_km_mode','auto')=='user' else recommendation
+    return min(target,user_cap),phase
+
+def automatic_max_weekly_km(c,race=None,ref:date|None=None):
+    """History-based hard ceiling: robust completed-week volume times a race/trend factor."""
+    race=race or current_race(c);dist=float(race['distance_km']) if race else 21.0975
+    ev=established_volume(c,ref);base=ev['km'] or float(get_setting(c,'baseline_weekly_km',40))
+    factor=1.10 if dist>=40 else 1.08 if dist>=20 else 1.06
+    if ev['trend']=='reduziert':factor*=.95
+    return round(max(14,min(180,base*factor)),1)
 
 def _long_run(c,race,ws,phase,total):
     dist=float(race['distance_km']);p=_prefs(c,dist);h=long_run_history(c,ws);recent=h['longest_4w'] or h['longest_8w']; normal=total*min(.38,p['max_share'])
@@ -192,10 +204,20 @@ def _templates(c,race,ws,phase,total):
     elif idx==1:qt,qd,qz,qr='Cruise-Intervalle','2 km locker, 5 × 1,5 km an der Schwelle mit kurzer Trabpause, auslaufen.','threshold','7/10'
     elif idx==2:qt,qd,qz,qr='Kontinuierlicher Tempolauf','2 km locker, 25–35 min kontrolliert an der Schwelle, auslaufen.','threshold','7/10'
     else:qt,qd,qz,qr='Schwellenintervalle','2 km locker, 3 × 3 km kontrolliert an der Schwelle, 2 min Trabpause, auslaufen.','threshold','7–8/10'
-    if phase=='race':return [('easy','Locker + Strides',6,'easy','2–3/10','Frische','Locker + 4 Steigerungen.'),('raceprep','Race-Pace Aktivierung',5,'goal','5/10','Aktivierung','Kurze Zielpace-Reize.'),('easy','Shakeout',4,'easy','1–2/10','Frische','Sehr locker.'),('race','Wettkampf',dist,'goal','Wettkampf','Zielwettkampf','Kontrolliert eröffnen.')]
-    quality=max(7,total*(.16 if hard_long else .21)); easy1=max(5,total*.19);easy2=max(5,total-long_km-quality-easy1)
+    run_days=len(get_setting(c,'training_days',[1,3,4,6]));quality_limit=min(p['quality'],max(1,run_days-2)); hard_budget=max(0,quality_limit-(1 if hard_long else 0))
+    if phase=='race':
+        easy_count=max(1,run_days-2);easy_km=max(2,(total-dist-5)/easy_count)
+        return [('easy','Locker + Strides' if i==0 else 'Shakeout',easy_km,'easy','1–3/10','Frische','Sehr locker; einige kurze Steigerungen nur bei guten Beinen.') for i in range(easy_count)]+[('raceprep','Race-Pace Aktivierung',5,'goal','5/10','Aktivierung','Kurze Zielpace-Reize.'),('race','Wettkampf',dist,'goal','Wettkampf','Zielwettkampf','Kontrolliert eröffnen.')]
+    quality=max(5,total*(.14 if hard_long else .18)); remaining=max(0,total-long_km-quality*hard_budget);easy_km=remaining/max(1,run_days-1-hard_budget)
     long_text={'easy':'Ruhig und gesprächsfähig; Fueling üben.','progressive':'Überwiegend locker, den Schluss kontrolliert moderat laufen.','mp_finish':'Überwiegend locker, finalen Abschnitt kontrolliert in Marathonpace.','mp_blocks':'Lockere Abschnitte mit einfachen Marathonpace-Blöcken; nicht schneller.','peak':'Langer, überwiegend lockerer Ausdauerlauf; Fueling vollständig proben.','recovery':'Bewusst locker und reduziert.','taper':'Locker, kurz und frisch beenden.'}.get(kind,'Locker laufen.')
-    return [('easy','Easy Run',easy1,'easy','2–3/10','Aerobe Basis','Locker; bei Hitze, Hügeln oder Müdigkeit hat RPE Vorrang.'),('quality',qt,quality,qz,qr,'Qualität ohne Überlastung',qd),('easy','Easy Run',easy2,'easy','2–3/10','Lockerer Umfang','Locker laufen.'),('long','Long Run',long_km,'goal' if hard_long and kind!='progressive' else 'easy','6/10' if hard_long else '3–4/10','Marathon-Ausdauer',long_text+' '+reason)]
+    templates=[]
+    for i in range(run_days-1):
+        if i<hard_budget:templates.append(('quality',qt if i==0 else 'Kontrollierter Tempolauf',quality,qz,qr,'Qualität ohne Überlastung',qd))
+        else:templates.append(('easy','Regenerationslauf' if run_days>=6 and i==run_days-2 else 'Easy Run',max(3,easy_km),'easy','2–3/10','Aerobe Basis','Locker; RPE hat Vorrang.'))
+    templates.append(('long','Long Run',long_km,'goal' if hard_long and kind!='progressive' else 'easy','6/10' if hard_long else '3–4/10','Marathon-Ausdauer',long_text+' '+reason))
+    # Rounding/minimums must never turn a ceiling into a target violation.
+    scale=min(1,total/sum(x[2] for x in templates))
+    return [(*x[:2],x[2]*scale,*x[3:]) for x in templates]
 
 def _wdict(r):
     d=dict(r);d['details']=json.loads(d.pop('details_json','{}'));d['pace_text']=None
@@ -222,12 +244,12 @@ def generate_week(c,ws:date|None=None,force=False):
         c.execute("DELETE FROM plan_reviews WHERE week_start=?",(key,))
     protected=c.execute("SELECT * FROM workouts WHERE origin_week_start=?",(key,)).fetchall()
     if protected and not force:return [_wdict(r) for r in existing]
-    total,phase=_weekly_target(c,race,ws);zones=_zones(c,race);templates=_templates(c,race,ws,phase,total);days=sorted(set(int(x) for x in get_setting(c,'training_days',[1,3,4,6]) if 0<=int(x)<=6));days=days if len(days)==4 else [1,3,4,6];dates=[ws+timedelta(days=d) for d in days]
+    total,phase=_weekly_target(c,race,ws);zones=_zones(c,race);templates=_templates(c,race,ws,phase,total);days=sorted(set(int(x) for x in get_setting(c,'training_days',[1,3,4,6]) if 0<=int(x)<=6));days=days if 3<=len(days)<=7 else [1,3,4,6];dates=[ws+timedelta(days=d) for d in days]
     occupied={r['scheduled_date'] for r in c.execute("SELECT scheduled_date FROM workouts WHERE scheduled_date BETWEEN ? AND ?",(key,(ws+timedelta(days=6)).isoformat()))}
     generation=datetime.now(timezone.utc).isoformat()
     for scheduled,t in zip(dates,templates):
         typ,title,km,zone,rpe,purpose,instructions=t;low,high=zones.get(zone,(None,None));details={'purpose':purpose,'instructions':instructions,'phase':phase,'week_target_km':round(total,1),'rpe_target':rpe,'plan_basis':plan_basis(c,ws,race,total,phase)}
-        c.execute("INSERT INTO workouts(week_start,origin_week_start,scheduled_date,workout_type,title,distance_km,pace_low_s_per_km,pace_high_s_per_km,details_json,status,manual_override,modified_by,generation_version,plan_generation_id) VALUES(?,?,?,?,?,?,?,?,?,'planned',0,'engine','0.1.7',?)",(key,key,scheduled.isoformat(),typ,title,round(km,1),low,high,json.dumps(details,ensure_ascii=False),generation))
+        c.execute("INSERT INTO workouts(week_start,origin_week_start,scheduled_date,workout_type,title,distance_km,pace_low_s_per_km,pace_high_s_per_km,details_json,status,manual_override,modified_by,generation_version,plan_generation_id) VALUES(?,?,?,?,?,?,?,?,?,'planned',0,'engine','0.1.8',?)",(key,key,scheduled.isoformat(),typ,title,round(km,1),low,high,json.dumps(details,ensure_ascii=False),generation))
     if force:
         from db import set_setting
         set_setting(c,'plan_stale',False);set_setting(c,'plan_stale_reason','')
@@ -236,15 +258,17 @@ def generate_week(c,ws:date|None=None,force=False):
 def refresh_plan(c,start:date|None=None,weeks=4):
     start=week_start_for(start or date.today());old=[]
     for i in range(weeks):
-        ws=start+timedelta(days=7*i); rows0=[_wdict(r) for r in c.execute("SELECT * FROM workouts WHERE week_start=?",(ws.isoformat(),))];old+=rows0;generate_week(c,ws,True)
-    new=[]
-    for i in range(weeks):new += [_wdict(r) for r in c.execute("SELECT * FROM workouts WHERE week_start=?",((start+timedelta(days=7*i)).isoformat(),))]
+        ws=start+timedelta(days=7*i); rows0=[_wdict(r) for r in c.execute("SELECT * FROM workouts WHERE week_start=?",(ws.isoformat(),))];
+        if i==0:old=rows0
+        generate_week(c,ws,True)
+    new=[_wdict(r) for r in c.execute("SELECT * FROM workouts WHERE week_start=?",(start.isoformat(),))]
     def stats(xs):return (round(sum(float(x['distance_km']) for x in xs),1),max([float(x['distance_km']) for x in xs if x['workout_type']=='long'] or [0]),next((x['title'] for x in xs if x['workout_type']=='quality'),None))
     a,b=stats(old),stats(new);diff={};
     if a[0]!=b[0]:diff['volume_km']={'old':a[0],'new':b[0]}
     if a[1]!=b[1]:diff['long_run_km']={'old':a[1],'new':b[1]}
     if a[2]!=b[2]:diff['quality']={'old':a[2],'new':b[2]}
-    return {'updated':bool(diff),'diff':diff,'weeks':weeks}
+    if len(old)!=len(new):diff['session_count']={'old':len(old),'new':len(new)}
+    return {'updated':bool(diff),'diff':diff,'weeks':weeks,'summary_week_start':start.isoformat()}
 
 def move_workout(c,wid:int,new:date):
     r=c.execute("SELECT * FROM workouts WHERE id=?",(wid,)).fetchone()
