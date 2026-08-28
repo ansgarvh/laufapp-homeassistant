@@ -31,7 +31,9 @@ jobs:
       - name: Python compile check
         run: python -m compileall -q laufapp/app tests
       - name: JavaScript syntax check
-        run: node --check laufapp/app/static/app.js
+        run: |
+          node --check laufapp/app/static/app.js
+          node --check laufapp/app/static/assets/v020.js
       - name: Full regression suite
         run: pytest -q
       - name: Docker build
