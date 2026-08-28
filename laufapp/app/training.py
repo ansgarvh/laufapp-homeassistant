@@ -233,8 +233,28 @@ def plan_basis(c,ws,race,total,phase):
     ev=established_volume(c,ws);lh=long_run_history(c,ws);weeks=max(0,(date.fromisoformat(race['race_date'])-ws).days//7)
     return {'established_weekly_km':ev['km'] or _prefs(c,float(race['distance_km']))['baseline'],'trend':ev['trend'],'longest_recent_km':lh['longest_8w'],'phase':phase,'weeks_to_race':weeks,'planned_weekly_km':round(total,1),'current_partial_km':ev['current_partial_km']}
 
+def _cleanup_generated_collisions(c,ws:date)->int:
+    """Remove only stale engine rows that collide with protected/user-owned rows.
+
+    v0.1.8 could regenerate a planned engine workout on a date that already held
+    a completed, linked or manually changed workout. Those stale duplicates are
+    safe to remove because the protected row is authoritative. Ambiguous groups
+    containing only generated planned rows are left untouched for investigation.
+    """
+    key=week_start_for(ws).isoformat();end=(week_start_for(ws)+timedelta(days=6)).isoformat();removed=0
+    groups={}
+    for r in c.execute("SELECT * FROM workouts WHERE scheduled_date BETWEEN ? AND ? ORDER BY id",(key,end)).fetchall():groups.setdefault(r['scheduled_date'],[]).append(r)
+    for group in groups.values():
+        if len(group)<2:continue
+        protected=[r for r in group if r['status']!='planned' or r['linked_run_id'] is not None or int(r['manual_override'] or 0)!=0 or (r['modified_by'] or 'engine')!='engine']
+        generated=[r for r in group if r['status']=='planned' and r['linked_run_id'] is None and int(r['manual_override'] or 0)==0 and (r['modified_by'] or 'engine')=='engine']
+        if protected and generated:
+            ids=[int(r['id']) for r in generated];c.executemany("DELETE FROM workouts WHERE id=?",[(i,) for i in ids]);removed+=len(ids)
+    return removed
+
 def generate_week(c,ws:date|None=None,force=False):
-    ws=week_start_for(ws or date.today());key=ws.isoformat();existing=c.execute("SELECT * FROM workouts WHERE week_start=? ORDER BY scheduled_date",(key,)).fetchall();native=c.execute("SELECT * FROM workouts WHERE origin_week_start=? ORDER BY scheduled_date",(key,)).fetchall()
+    ws=week_start_for(ws or date.today());key=ws.isoformat();_cleanup_generated_collisions(c,ws)
+    existing=c.execute("SELECT * FROM workouts WHERE week_start=? ORDER BY scheduled_date",(key,)).fetchall();native=c.execute("SELECT * FROM workouts WHERE origin_week_start=? ORDER BY scheduled_date",(key,)).fetchall()
     if native and not force:return [_wdict(r) for r in existing]
     race=current_race(c)
     if not race:return [_wdict(r) for r in existing]
@@ -243,27 +263,31 @@ def generate_week(c,ws:date|None=None,force=False):
         c.execute("DELETE FROM workouts WHERE origin_week_start=? AND scheduled_date>=? AND status='planned' AND linked_run_id IS NULL AND COALESCE(manual_override,0)=0",(key,date.today().isoformat()))
         c.execute("DELETE FROM plan_reviews WHERE week_start=?",(key,))
     protected=c.execute("SELECT * FROM workouts WHERE origin_week_start=?",(key,)).fetchall()
-    if protected and not force:return [_wdict(r) for r in existing]
+    if protected and not force:return [_wdict(r) for r in c.execute("SELECT * FROM workouts WHERE week_start=? ORDER BY scheduled_date",(key,)).fetchall()]
     total,phase=_weekly_target(c,race,ws);zones=_zones(c,race);templates=_templates(c,race,ws,phase,total);days=sorted(set(int(x) for x in get_setting(c,'training_days',[1,3,4,6]) if 0<=int(x)<=6));days=days if 3<=len(days)<=7 else [1,3,4,6];dates=[ws+timedelta(days=d) for d in days]
-    occupied={r['scheduled_date'] for r in c.execute("SELECT scheduled_date FROM workouts WHERE scheduled_date BETWEEN ? AND ?",(key,(ws+timedelta(days=6)).isoformat()))}
+    visible=c.execute("SELECT * FROM workouts WHERE scheduled_date BETWEEN ? AND ? ORDER BY scheduled_date,id",(key,(ws+timedelta(days=6)).isoformat())).fetchall();occupied={r['scheduled_date'] for r in visible};preserved_km=sum(float(r['distance_km'] or 0) for r in visible)
+    candidates=[(scheduled,t) for scheduled,t in zip(dates,templates) if scheduled.isoformat() not in occupied]
+    candidate_km=sum(float(t[2]) for _,t in candidates);remaining=max(0.0,total-preserved_km);scale=min(1.0,remaining/candidate_km) if candidate_km>0 else 0.0
     generation=datetime.now(timezone.utc).isoformat()
-    for scheduled,t in zip(dates,templates):
-        typ,title,km,zone,rpe,purpose,instructions=t;low,high=zones.get(zone,(None,None));details={'purpose':purpose,'instructions':instructions,'phase':phase,'week_target_km':round(total,1),'rpe_target':rpe,'plan_basis':plan_basis(c,ws,race,total,phase)}
-        c.execute("INSERT INTO workouts(week_start,origin_week_start,scheduled_date,workout_type,title,distance_km,pace_low_s_per_km,pace_high_s_per_km,details_json,status,manual_override,modified_by,generation_version,plan_generation_id) VALUES(?,?,?,?,?,?,?,?,?,'planned',0,'engine','0.1.8',?)",(key,key,scheduled.isoformat(),typ,title,round(km,1),low,high,json.dumps(details,ensure_ascii=False),generation))
+    for scheduled,t in candidates:
+        typ,title,km,zone,rpe,purpose,instructions=t;km*=scale
+        if km<=0.05:continue
+        low,high=zones.get(zone,(None,None));details={'purpose':purpose,'instructions':instructions,'phase':phase,'week_target_km':round(total,1),'rpe_target':rpe,'plan_basis':plan_basis(c,ws,race,total,phase)}
+        c.execute("INSERT INTO workouts(week_start,origin_week_start,scheduled_date,workout_type,title,distance_km,pace_low_s_per_km,pace_high_s_per_km,details_json,status,manual_override,modified_by,generation_version,plan_generation_id) VALUES(?,?,?,?,?,?,?,?,?,'planned',0,'engine','0.1.9',?)",(key,key,scheduled.isoformat(),typ,title,round(km,1),low,high,json.dumps(details,ensure_ascii=False),generation))
     if force:
         from db import set_setting
         set_setting(c,'plan_stale',False);set_setting(c,'plan_stale_reason','')
-    return [_wdict(r) for r in c.execute("SELECT * FROM workouts WHERE week_start=? ORDER BY scheduled_date",(key,)).fetchall()]
+    return [_wdict(r) for r in c.execute("SELECT * FROM workouts WHERE week_start=? ORDER BY scheduled_date,id",(key,)).fetchall()]
 
 def refresh_plan(c,start:date|None=None,weeks=4):
     start=week_start_for(start or date.today());old=[]
     for i in range(weeks):
-        ws=start+timedelta(days=7*i); rows0=[_wdict(r) for r in c.execute("SELECT * FROM workouts WHERE week_start=?",(ws.isoformat(),))];
+        ws=start+timedelta(days=7*i);_cleanup_generated_collisions(c,ws);rows0=[_wdict(r) for r in c.execute("SELECT * FROM workouts WHERE week_start=? ORDER BY scheduled_date,id",(ws.isoformat(),))]
         if i==0:old=rows0
         generate_week(c,ws,True)
-    new=[_wdict(r) for r in c.execute("SELECT * FROM workouts WHERE week_start=?",(start.isoformat(),))]
+    new=[_wdict(r) for r in c.execute("SELECT * FROM workouts WHERE week_start=? ORDER BY scheduled_date,id",(start.isoformat(),))]
     def stats(xs):return (round(sum(float(x['distance_km']) for x in xs),1),max([float(x['distance_km']) for x in xs if x['workout_type']=='long'] or [0]),next((x['title'] for x in xs if x['workout_type']=='quality'),None))
-    a,b=stats(old),stats(new);diff={};
+    a,b=stats(old),stats(new);diff={}
     if a[0]!=b[0]:diff['volume_km']={'old':a[0],'new':b[0]}
     if a[1]!=b[1]:diff['long_run_km']={'old':a[1],'new':b[1]}
     if a[2]!=b[2]:diff['quality']={'old':a[2],'new':b[2]}
