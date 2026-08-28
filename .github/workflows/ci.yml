@@ -38,3 +38,17 @@ jobs:
         run: pytest -q
       - name: Docker build
         run: docker build --pull --build-arg BUILD_VERSION=$(python -c "import yaml; print(yaml.safe_load(open('laufapp/config.yaml'))['version'])") --build-arg BUILD_ARCH=amd64 -t laufapp-ci:${{ github.sha }} laufapp
+      - name: Docker runtime smoke test
+        run: |
+          set -euo pipefail
+          docker run -d --name laufapp-smoke -e LAUFAPP_TRUSTED_INGRESS_ONLY=0 -p 18099:8099 laufapp-ci:${{ github.sha }}
+          trap 'docker logs laufapp-smoke || true; docker rm -f laufapp-smoke >/dev/null 2>&1 || true' EXIT
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:18099/api/health > /tmp/laufapp-health.json; then break; fi
+            sleep 1
+          done
+          python - <<'PY'
+          import json
+          data=json.load(open('/tmp/laufapp-health.json'))
+          assert data == {'ok': True, 'version': '0.2.0'}, data
+          PY
