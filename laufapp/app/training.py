@@ -241,7 +241,7 @@ def _cleanup_generated_collisions(c,ws:date)->int:
     safe to remove because the protected row is authoritative. Ambiguous groups
     containing only generated planned rows are left untouched for investigation.
     """
-    key=week_start_for(ws).isoformat();end=(week_start_for(ws)+timedelta(days=6)).isoformat();removed=0
+    start=week_start_for(ws);key=start.isoformat();end=(start+timedelta(days=6)).isoformat();removed=0
     groups={}
     for r in c.execute("SELECT * FROM workouts WHERE scheduled_date BETWEEN ? AND ? ORDER BY id",(key,end)).fetchall():groups.setdefault(r['scheduled_date'],[]).append(r)
     for group in groups.values():
@@ -249,25 +249,59 @@ def _cleanup_generated_collisions(c,ws:date)->int:
         protected=[r for r in group if r['status']!='planned' or r['linked_run_id'] is not None or int(r['manual_override'] or 0)!=0 or (r['modified_by'] or 'engine')!='engine']
         generated=[r for r in group if r['status']=='planned' and r['linked_run_id'] is None and int(r['manual_override'] or 0)==0 and (r['modified_by'] or 'engine')=='engine']
         if protected and generated:
-            ids=[int(r['id']) for r in generated];c.executemany("DELETE FROM workouts WHERE id=?",[(i,) for i in ids]);removed+=len(ids)
+            c.executemany("DELETE FROM workouts WHERE id=?",[(int(r['id']),) for r in generated]);removed+=len(generated)
     return removed
 
+def _remaining_template_slots(dates,templates,native_rows):
+    """Consume one deterministic template slot for every preserved native row."""
+    slots=[{'date':d,'template':t,'used':False} for d,t in zip(dates,templates)]
+    for r in sorted(native_rows,key=lambda x:int(x['id'])):
+        available=[i for i,s in enumerate(slots) if not s['used']]
+        if not available:break
+        scheduled=str(r['scheduled_date']);typ=str(r['workout_type']);title=str(r['title'])
+        chosen=next((i for i in available if slots[i]['date'].isoformat()==scheduled),None)
+        if chosen is None:chosen=next((i for i in available if slots[i]['template'][0]==typ and slots[i]['template'][1]==title),None)
+        if chosen is None:chosen=next((i for i in available if slots[i]['template'][0]==typ),None)
+        if chosen is None:chosen=available[0]
+        slots[chosen]['used']=True
+    return [(s['date'],s['template']) for s in slots if not s['used']]
+
+def _schedule_remaining_slots(ws,remaining,occupied):
+    """Keep configured dates where possible; relocate only true collisions."""
+    week_dates=[ws+timedelta(days=i) for i in range(7)];assigned=set();out=[]
+    reserved={d.isoformat() for d,_ in remaining if d.isoformat() not in occupied}
+    for preferred,t in remaining:
+        key=preferred.isoformat()
+        if key not in occupied and key not in assigned:
+            scheduled=preferred
+        else:
+            pool=[d for d in week_dates if d.isoformat() not in occupied and d.isoformat() not in assigned and d.isoformat() not in reserved]
+            if not pool:pool=[d for d in week_dates if d.isoformat() not in occupied and d.isoformat() not in assigned]
+            # Seven configured days plus an incoming manual workout can leave no
+            # unique day. Preserve the requested/manual schedule rather than
+            # deleting a native session; the guardrails can then surface density.
+            scheduled=min(pool,key=lambda d:(abs((d-preferred).days),d.weekday())) if pool else preferred
+        assigned.add(scheduled.isoformat());reserved.discard(scheduled.isoformat());out.append((scheduled,t))
+    return out
+
 def generate_week(c,ws:date|None=None,force=False):
-    ws=week_start_for(ws or date.today());key=ws.isoformat();_cleanup_generated_collisions(c,ws)
-    existing=c.execute("SELECT * FROM workouts WHERE week_start=? ORDER BY scheduled_date",(key,)).fetchall();native=c.execute("SELECT * FROM workouts WHERE origin_week_start=? ORDER BY scheduled_date",(key,)).fetchall()
-    if native and not force:return [_wdict(r) for r in existing]
+    ws=week_start_for(ws or date.today());key=ws.isoformat();removed=_cleanup_generated_collisions(c,ws)
+    existing=c.execute("SELECT * FROM workouts WHERE week_start=? ORDER BY scheduled_date,id",(key,)).fetchall();native=c.execute("SELECT * FROM workouts WHERE origin_week_start=? ORDER BY scheduled_date,id",(key,)).fetchall()
+    # Normal week loads must never silently regenerate after a settings change.
+    # The sole exception is self-healing after the v0.1.8 collision cleanup.
+    if native and not force and not removed:return [_wdict(r) for r in existing]
     race=current_race(c)
     if not race:return [_wdict(r) for r in existing]
     if force:
         # Only untouched, future, planned generated rows are replaceable.
         c.execute("DELETE FROM workouts WHERE origin_week_start=? AND scheduled_date>=? AND status='planned' AND linked_run_id IS NULL AND COALESCE(manual_override,0)=0",(key,date.today().isoformat()))
         c.execute("DELETE FROM plan_reviews WHERE week_start=?",(key,))
-    protected=c.execute("SELECT * FROM workouts WHERE origin_week_start=?",(key,)).fetchall()
-    if protected and not force:return [_wdict(r) for r in c.execute("SELECT * FROM workouts WHERE week_start=? ORDER BY scheduled_date",(key,)).fetchall()]
+    native_rows=c.execute("SELECT * FROM workouts WHERE origin_week_start=? ORDER BY scheduled_date,id",(key,)).fetchall()
     total,phase=_weekly_target(c,race,ws);zones=_zones(c,race);templates=_templates(c,race,ws,phase,total);days=sorted(set(int(x) for x in get_setting(c,'training_days',[1,3,4,6]) if 0<=int(x)<=6));days=days if 3<=len(days)<=7 else [1,3,4,6];dates=[ws+timedelta(days=d) for d in days]
+    remaining_slots=_remaining_template_slots(dates,templates,native_rows)
     visible=c.execute("SELECT * FROM workouts WHERE scheduled_date BETWEEN ? AND ? ORDER BY scheduled_date,id",(key,(ws+timedelta(days=6)).isoformat())).fetchall();occupied={r['scheduled_date'] for r in visible};preserved_km=sum(float(r['distance_km'] or 0) for r in visible)
-    candidates=[(scheduled,t) for scheduled,t in zip(dates,templates) if scheduled.isoformat() not in occupied]
-    candidate_km=sum(float(t[2]) for _,t in candidates);remaining=max(0.0,total-preserved_km);scale=min(1.0,remaining/candidate_km) if candidate_km>0 else 0.0
+    candidates=_schedule_remaining_slots(ws,remaining_slots,occupied)
+    candidate_km=sum(float(t[2]) for _,t in candidates);remaining_km=max(0.0,total-preserved_km);scale=min(1.0,remaining_km/candidate_km) if candidate_km>0 else 0.0
     generation=datetime.now(timezone.utc).isoformat()
     for scheduled,t in candidates:
         typ,title,km,zone,rpe,purpose,instructions=t;km*=scale
@@ -298,7 +332,11 @@ def move_workout(c,wid:int,new:date):
     r=c.execute("SELECT * FROM workouts WHERE id=?",(wid,)).fetchone()
     if not r:raise KeyError('Workout nicht gefunden')
     if r['status']!='planned':raise ValueError('Nur geplante Einheiten können verschoben werden.')
-    old=date.fromisoformat(r['scheduled_date']);targets=c.execute("SELECT * FROM workouts WHERE id!=? AND scheduled_date=?",(wid,new.isoformat())).fetchall();target=targets[0] if len(targets)==1 else None
+    old=date.fromisoformat(r['scheduled_date'])
+    if new==old:return {'workout':_wdict(r),'warnings':[],'operation':'noop'}
+    targets=c.execute("SELECT * FROM workouts WHERE id!=? AND scheduled_date=? ORDER BY id",(wid,new.isoformat())).fetchall()
+    if len(targets)>1:raise ValueError('Der Zieltag ist mehrfach belegt. Bitte die Woche zuerst neu laden beziehungsweise bereinigen.')
+    target=targets[0] if targets else None
     if target and target['status']!='planned':raise ValueError('Auf eine absolvierte Einheit kann nicht getauscht werden.')
     if target:
         c.execute("UPDATE workouts SET scheduled_date=?,week_start=?,manual_override=1,modified_by='user' WHERE id=?",(old.isoformat(),week_start_for(old).isoformat(),target['id']))
