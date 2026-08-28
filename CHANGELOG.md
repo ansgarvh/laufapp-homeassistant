@@ -1,5 +1,12 @@
 # Laufapp Changelog
 
+## v0.1.4 – 2026-08-28
+
+### Behoben
+- Home Assistant Ingress streamt große Apple-Health-Uploads nun direkt zur Laufapp, statt sie vor der Weiterleitung vollständig zu puffern.
+- Die bestehende Ingress-only-Zugriffskontrolle und der standardmäßig nicht veröffentlichte Webport bleiben unverändert.
+- Ein statischer Regressionstest stellt sicher, dass Ingress-Streaming in der Home-Assistant-App-Konfiguration aktiviert bleibt.
+
 ## v0.1.3 – 2026-08-28
 
 ### Datenhaltung & Updates

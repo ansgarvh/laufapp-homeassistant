@@ -1,8 +1,12 @@
-# Laufapp v0.1.3
+# Laufapp v0.1.4
 
 Private, mobile-first Lauf-PWA für Home Assistant OS auf dem Beelink Mini S12. Die App verbindet eine lokale Trainings-/Prognoseengine mit Apple-Health-Daten und einem optionalen OpenAI-Coach. Sie ist für genau einen Nutzer ausgelegt.
 
-## Highlights von v0.1.3
+## Highlights von v0.1.4
+
+- **Große Apple-Health-Uploads über Ingress:** Home Assistant streamt Uploads direkt zur Laufapp. Dadurch können auch große Exportdateien zuverlässig über Ingress hochgeladen werden, ohne die bestehende Ingress-only-Zugriffskontrolle zu ändern.
+
+### Weiterhin enthalten aus v0.1.3
 
 - **Persistente Daten über Updates:** Läufe, Health-Metriken, Schuhe, Wettkämpfe, Trainingsplan, Bestleistungen und Coach-Historie bleiben in `/data/laufapp.sqlite3` erhalten.
 - **Versionierte Datenbankmigration:** v0.1.2 wird beim Start automatisch auf Schema 2 migriert. Vor jeder Schemaänderung entsteht eine SQLite-Sicherung unter `/data/backups/`; bei einem Migrationsfehler wird der Vorzustand wiederhergestellt und der App-Start abgebrochen.
@@ -46,13 +50,13 @@ Der API-Key verbleibt serverseitig in der Home-Assistant-App-Konfiguration (`/da
 
 Standardmodelle: `gpt-5.6-terra` für den Coach und `gpt-5.6-luna` für Screenshot-Extraktion. Wissenschaftliche Websuche ist optional.
 
-## Teststatus v0.1.3
+## Teststatus v0.1.4
 
 Vor der Paketierung wurden unter anderem ausgeführt:
 
 - Python-Compilecheck für Backend und Tests.
 - JavaScript-Syntaxcheck mit Node.
-- **30 automatisierte Regressionstests** inklusive vollständigem synthetischem End-to-End-Workflow.
+- **31 automatisierte Regressionstests** inklusive vollständigem synthetischem End-to-End-Workflow und statischer Prüfung des Ingress-Streamings.
 - Upgrade-Test einer gefüllten v0.1.2-Datenbank auf v0.1.3 mit Datenerhalt und Vorab-Backup.
 - Fehler-Injektion in die Migration mit Wiederherstellung des exakten Vorzustands.
 - Test des Einmal-Transfers local → GitHub sowie Schutz vor Überschreiben einer bereits vorhandenen Repository-Datenbank.
@@ -61,7 +65,7 @@ Vor der Paketierung wurden unter anderem ausgeführt:
 - Belastungstest mit einer ca. 100-MB-ZIP und rund 699.000 Health-Records.
 - Responsive Renderprüfung der neuen Import-/GitHub-Oberfläche bei 390 px und 320 px ohne horizontalen Overflow.
 
-Ein echter Docker-/Supervisor-Build kann in der aktuellen Entwicklungsumgebung nicht ausgeführt werden, weil dort kein Docker-Daemon vorhanden ist. Die v0.1.2-Basis wurde bereits erfolgreich auf dem realen Home-Assistant-OS-Beelink gebaut; für v0.1.3 muss der reale Build beim einmaligen lokalen Update erneut verifiziert werden. Echte OpenAI-Netzwerkaufrufe mit dem persönlichen API-Key sind ebenfalls nicht Teil der isolierten Tests.
+Compile-, Regressions- und synthetische End-to-End-Tests laufen isoliert und ersetzen keinen Integrationstest auf einer realen Home-Assistant-Installation. Der Docker-Build sowie ein großer Upload über echten Home-Assistant-Ingress müssen deshalb im jeweiligen Release-Prozess separat verifiziert werden. Echte OpenAI-Netzwerkaufrufe mit dem persönlichen API-Key sind ebenfalls nicht Teil der isolierten Tests.
 
 ## Lokale Entwicklung
 
