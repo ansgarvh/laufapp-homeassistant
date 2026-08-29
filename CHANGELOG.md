@@ -1,15 +1,28 @@
 # Laufapp Changelog
 
-## v0.2.0 – 2026-08-28
+## v0.2.0 – 2026-08-29
 
 - Mehrere zukünftige Wettkämpfe können unter **Einstellungen → Rennen** gepflegt, bearbeitet und gelöscht werden. Bestehende v0.1.9-Wettkämpfe werden kompatibel als A-Rennen behandelt.
 - **A-Rennen** steuern den Trainingsblock vollständig; das jeweils nächste zukünftige A-Rennen ist der Planfokus, nach dessen Rennwoche übernimmt automatisch das nächste A-Rennen.
 - **B-Rennen** lösen keinen Taper und keine Änderung der vorherigen Trainingswochen aus. In ihrer Rennwoche ersetzen sie ausschließlich den Longrun; die übrigen Trainingseinheiten bleiben in einer normalen konfliktfreien Woche unverändert.
 - Jedes Rennen besitzt eine eigene Zielzeit. Direkt darunter zeigt Laufapp dezent die datenbasierte aktuelle Zeitprognose inklusive Prognosebereich an; die Empfehlung kann optional als Ziel übernommen werden.
 - Trainingsumfang erhält eine echte rennrelative Blockprogression: aufeinanderfolgende Build-/Specific-Belastungswochen können innerhalb eines Blocks ansteigen, Recovery, Nutzerobergrenzen, Detraining und Taper bleiben harte Gegenbedingungen.
+- Neue wissenschaftlich orientierte Planner-Struktur trennt **TrainingPhase**, **PhysiologicalTarget**, **WorkoutType**, **WorkoutVariant**, **TrainingLoad** und **RecoveryState**; der lokale Basistrainingsplan bleibt deterministisch und LLM-unabhängig.
+- Qualitätseinheiten werden nicht mehr nach Wochentagstyp ausgewählt. Zuerst wird der physiologische Reiz bestimmt, danach wählt eine deterministische Workout-Variation-Engine eine passende Form aus Schwelle, VO₂max, Ökonomie, Marathonpace, aerober Progression oder Hügel/Kraftausdauer.
+- Die Variation berücksichtigt jetzt ausdrücklich die Historie der **Qualitätseinheiten**: identische Varianten werden in den folgenden ungefähr fünf Wochen deutlich benachteiligt, ohne wahllos das physiologische Trainingsziel zu wechseln.
+- Marathon-Longruns unterscheiden Easy, Progression, Fast Finish, MP-Blöcke und Deload. Distanz und Marathonpace-Anteil werden nicht regelmäßig gleichzeitig stark erhöht; 30–35-km-Longruns dürfen bei passender realer Historie die normale Longrun-Anteilsorientierung überschreiten, das explizite Nutzermaximum bleibt hart.
+- **Goal Marathon Pace** und **Current Estimated Marathon Pace** werden getrennt; Trainings-Marathonpace folgt primär dem aktuell gestützten Leistungsniveau statt blind einer ambitionierten Wunschzeit.
+- Intensitätsverteilung wird rollierend über vier Wochen als Planungsmodell bewertet. Der Marathonplan bleibt klar niedrigintensiv dominiert; Prozentbereiche sind Orientierungen und keine starren wissenschaftlichen Grenzwerte.
+- Readiness kombiniert persönliche HRV-/Ruhepuls-Baselines, Schlaf, subjektive Erholung, Beine, RPE, Beschwerden und – soweit vorhanden – Laufreaktionen. Ein einzelner HRV-Wert kann keine automatische harte Planentscheidung auslösen.
+- Nach absolvierten Einheiten können RPE, Beine, Schmerzen und subjektive Erholung erfasst werden. Schlechte wie auch besonders gute Belastungsverträglichkeit erzeugt höchstens einen **bestätigungspflichtigen** Coach-/Planvorschlag; die App ändert zukünftige Einheiten nicht ungefragt.
+- Qualitätseinheiten und besondere Longruns speichern **„Warum diese Einheit?“**, physiologisches Ziel, Workoutform und geschätzte Belastung für die Wochen-/Detailansicht.
+- Der validierte 16-Wochen-Simulator prüft Periodisierung, Workoutvariation, Deloads, MP-Longruns, Longrun-Distanz-vs.-Intensität, begrenzte VO₂max-Rolle, Taper, rollierende Intensitätsverteilung und den vollständigen 42,195-km-Zielmarathon. Die CI führt ihn zusätzlich zur vollständigen Regression aus.
 - Absolvierte, mit einem realen Lauf verknüpfte Einheiten können direkt aus der Wochenansicht einem Schuh zugeordnet werden. Die vorhandene `runs.shoe_id`-Zuordnung wird verwendet, sodass die Kilometerbilanz des Schuhs sofort mit dem real gelaufenen Umfang steigt. Die bestehende Zuordnung im Fortschritt-Tab bleibt erhalten.
-- Keine neue Datenbankschemaversion nötig: A/B-Klassifikation wird kompatibel in den bestehenden persistenten Einstellungen gespeichert; vorhandene Läufe, Health-Daten, Schuhe, Trainingspläne und manuelle Änderungen bleiben erhalten.
+- Keine neue Datenbankschemaversion nötig: A/B-Klassifikation und subjektive Feedbackdaten werden kompatibel in bestehenden persistenten Strukturen gespeichert; vorhandene Läufe, Health-Daten, Schuhe, Trainingspläne und manuelle Änderungen bleiben erhalten.
 - Home-Assistant-Ingress, `ingress_stream`, persistente SQLite-Daten und die v0.1.9-Schutzmechanismen für manuelle/absolvierte Workouts bleiben erhalten.
+- Validierung des finalen Branch-Stands: Python-Compilecheck erfolgreich, JavaScript-Syntaxchecks erfolgreich, **69/69 Pytests**, 16-Wochen-Marathonsimulation erfolgreich, Home-Assistant-Docker-Build erfolgreich und Docker-Runtime-Smoke-Test erfolgreich.
+- Ausführliche Evidenz-/Algorithmusdokumentation: `TRAINING_ENGINE.md`. Das alternierende Longrun-Distanz/MP-Prinzip und konkrete Workoutrotationen werden ausdrücklich als konservative evidenzinformierte Designableitungen, nicht als direkt bewiesene überlegene Sequenzen dokumentiert.
+- Statisch/isoliert getestet; Home-Assistant-/Nabu-Casa-/iPhone-Integration muss lokal auf dem Beelink verifiziert werden.
 
 ## v0.1.9 – 2026-08-28
 
