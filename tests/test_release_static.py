@@ -4,10 +4,10 @@ ROOT=Path(__file__).resolve().parents[1]
 
 def test_versions_and_assets():
     cfg=yaml.safe_load((ROOT/'laufapp/config.yaml').read_text())
-    assert cfg['version']=='0.2.5'
-    assert 'APP_VERSION = "0.2.5"' in (ROOT/'laufapp/app/main_v025.py').read_text()
-    assert 'ARG BUILD_VERSION=0.2.5' in (ROOT/'laufapp/Dockerfile').read_text()
-    assert 'main_v025:app' in (ROOT/'laufapp/run.sh').read_text()
+    assert cfg['version']=='0.3.0'
+    assert 'APP_VERSION = "0.3.0"' in (ROOT/'laufapp/app/main_v030.py').read_text()
+    assert 'ARG BUILD_VERSION=0.3.0' in (ROOT/'laufapp/Dockerfile').read_text()
+    assert 'main_v030:app' in (ROOT/'laufapp/run.sh').read_text()
     static=ROOT/'laufapp/app/static'
     for name in ['index.html','styles.css','bugfix.css','app.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','assets/bugfix.css','assets/v020.js','assets/v020.css','assets/v020_science.js','assets/v020_science.css','assets/v023_aggressiveness.js','assets/v025.js','assets/v025.css']:assert (static/name).exists()
     m=json.loads((static/'manifest.webmanifest').read_text());assert m['display']=='standalone'
@@ -16,11 +16,7 @@ def test_versions_and_assets():
     index=(static/'index.html').read_text()
     for asset in ['app.js?v=0.2.5','assets/bugfix.css?v=0.2.5','assets/v020.js?v=0.2.5','assets/v020_science.js?v=0.2.5','assets/v023_aggressiveness.js?v=0.2.5','assets/v025.js?v=0.2.5','assets/v025.css?v=0.2.5']:
         assert asset in index
-    races=(static/'assets/v020.js').read_text()
-    science=(static/'assets/v020_science.js').read_text()
-    v023=(static/'assets/v023_aggressiveness.js').read_text()
-    v025=(static/'assets/v025.js').read_text()
-    css025=(static/'assets/v025.css').read_text()
+    races=(static/'assets/v020.js').read_text(); science=(static/'assets/v020_science.js').read_text(); v023=(static/'assets/v023_aggressiveness.js').read_text(); v025=(static/'assets/v025.js').read_text(); css025=(static/'assets/v025.css').read_text()
     assert 'A-Rennen' in races and 'B-Rennen' in races and 'api/v2/races' in races
     assert 'Planungsaggressivität' in science
     assert all(label in science for label in ['Konservativ','Moderat','Aggressiv'])
@@ -36,14 +32,13 @@ def test_versions_and_assets():
 def test_ha_app_config():
     cfg=yaml.safe_load((ROOT/'laufapp/config.yaml').read_text())
     assert cfg['arch']==['amd64'] and cfg['ingress'] is True and cfg['ingress_port']==8099
+    assert cfg['ports']['8099/tcp'] is None
     assert cfg['schema']['openai_api_key']=='password'
     assert 'share:rw' in cfg.get('map',[])
-
 
 def test_large_uploads_use_home_assistant_ingress_streaming():
     cfg=yaml.safe_load((ROOT/'laufapp/config.yaml').read_text())
     assert cfg.get('ingress_stream') is True
-
 
 def test_dockerfile_copy_sources_exist_in_build_context():
     import shlex
@@ -51,10 +46,8 @@ def test_dockerfile_copy_sources_exist_in_build_context():
     dockerfile = (context / 'Dockerfile').read_text().splitlines()
     for raw in dockerfile:
         line = raw.strip()
-        if not line or line.startswith('#') or not line.upper().startswith('COPY '):
-            continue
-        parts = shlex.split(line)
-        args = [p for p in parts[1:] if not p.startswith('--')]
+        if not line or line.startswith('#') or not line.upper().startswith('COPY '): continue
+        parts = shlex.split(line); args = [p for p in parts[1:] if not p.startswith('--')]
         assert len(args) >= 2, f'Invalid COPY instruction: {line}'
         for src in args[:-1]:
             assert not any(ch in src for ch in '*?['), f'Wildcard COPY not covered by test: {line}'
@@ -63,12 +56,27 @@ def test_dockerfile_copy_sources_exist_in_build_context():
     assert 'COPY requirements.txt /tmp/requirements.txt' in text
     assert 'COPY app/requirements.txt /tmp/requirements.txt' not in text
 
+def test_native_ios_companion_layout_and_security_contract():
+    ios=ROOT/'ios'
+    for path in ['project.yml','README.md','Laufapp/LaufappApp.swift','Laufapp/ContentView.swift','Laufapp/LaufappWebView.swift','Laufapp/HomeAssistantClient.swift','Laufapp/HealthKitService.swift','Laufapp/KeychainStore.swift','Laufapp/Models.swift','Laufapp/Laufapp.entitlements']:
+        assert (ios/path).is_file(), path
+    entitlements=(ios/'Laufapp/Laufapp.entitlements').read_text()
+    assert 'com.apple.developer.healthkit' in entitlements and 'background-delivery' in entitlements
+    client=(ios/'Laufapp/HomeAssistantClient.swift').read_text()
+    assert 'supervisor/api' in client and '/ingress/session' in client and 'ingress_session' in client
+    keychain=(ios/'Laufapp/KeychainStore.swift').read_text()
+    assert 'kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly' in keychain
+    health=(ios/'Laufapp/HealthKitService.swift').read_text()
+    for metric in ['runningPower','runningStrideLength','runningVerticalOscillation','runningGroundContactTime','workoutRoute']:
+        assert metric in health
+    backend=(ROOT/'laufapp/app/ios_healthkit_sync.py').read_text()
+    assert 'MAX_SAMPLES_PER_WORKOUT' in backend and 'apple_health_live' in backend
 
 def test_github_repository_layout():
     repo=yaml.safe_load((ROOT/'repository.yaml').read_text())
     assert repo['name']=='Laufapp Home Assistant Repository'
     assert repo['url']=='https://github.com/ansgarvh/laufapp-homeassistant'
     workflow=(ROOT/'.github/workflows/ci.yml').read_text()
-    for required in ['pytest -q','python -m compileall','node --check','docker build','v023_aggressiveness.js','v025.js']:
+    for required in ['pytest -q','python -m compileall','node --check','docker build','v023_aggressiveness.js','v025.js','xcodegen generate','xcodebuild']:
         assert required in workflow
     assert (ROOT/'requirements-dev.txt').is_file()
