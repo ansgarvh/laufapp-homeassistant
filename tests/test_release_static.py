@@ -4,19 +4,26 @@ ROOT=Path(__file__).resolve().parents[1]
 
 def test_versions_and_assets():
     cfg=yaml.safe_load((ROOT/'laufapp/config.yaml').read_text())
-    assert cfg['version']=='0.2.1'
-    assert 'APP_VERSION = "0.2.1"' in (ROOT/'laufapp/app/main_v021.py').read_text()
-    assert 'ARG BUILD_VERSION=0.2.1' in (ROOT/'laufapp/Dockerfile').read_text()
-    assert 'main_v021:app' in (ROOT/'laufapp/run.sh').read_text()
+    assert cfg['version']=='0.2.2'
+    assert 'APP_VERSION = "0.2.2"' in (ROOT/'laufapp/app/main_v022.py').read_text()
+    assert 'ARG BUILD_VERSION=0.2.2' in (ROOT/'laufapp/Dockerfile').read_text()
+    assert 'main_v022:app' in (ROOT/'laufapp/run.sh').read_text()
     static=ROOT/'laufapp/app/static'
-    for name in ['index.html','styles.css','bugfix.css','app.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','assets/v020.js','assets/v020.css','assets/v020_science.js','assets/v020_science.css']:assert (static/name).exists()
+    for name in ['index.html','styles.css','bugfix.css','app.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','assets/v020.js','assets/v020.css','assets/v020_science.js','assets/v020_science.css','assets/v022_settings.js']:assert (static/name).exists()
     m=json.loads((static/'manifest.webmanifest').read_text());assert m['display']=='standalone'
-    assert "const CACHE='laufapp-v0.2.1'" in (static/'sw.js').read_text()
+    sw=(static/'sw.js').read_text()
+    assert "const CACHE='laufapp-v0.2.2'" in sw
+    assert "assets/v022_settings.js?v=0.2.2" in sw
     index=(static/'index.html').read_text()
-    assert 'assets/bugfix.css' in index and 'assets/v020.css' in index and 'assets/v020.js' in index
+    for asset in ['app.js?v=0.2.2','assets/v020.js?v=0.2.2','assets/v020_science.js?v=0.2.2','assets/v022_settings.js?v=0.2.2']:
+        assert asset in index
+    guard=(static/'assets/v022_settings.js').read_text()
+    assert 'Planungsaggressivität' in guard
+    assert 'Rennen hinzufügen' in guard and "api/v2/races" in guard
     subprocess.run(['node','--check',str(static/'app.js')],check=True)
     subprocess.run(['node','--check',str(static/'assets/v020.js')],check=True)
     subprocess.run(['node','--check',str(static/'assets/v020_science.js')],check=True)
+    subprocess.run(['node','--check',str(static/'assets/v022_settings.js')],check=True)
 
 def test_ha_app_config():
     cfg=yaml.safe_load((ROOT/'laufapp/config.yaml').read_text())
@@ -57,6 +64,6 @@ def test_github_repository_layout():
     assert repo['name']=='Laufapp Home Assistant Repository'
     assert repo['url']=='https://github.com/ansgarvh/laufapp-homeassistant'
     workflow=(ROOT/'.github/workflows/ci.yml').read_text()
-    for required in ['pytest -q','python -m compileall','node --check','docker build']:
+    for required in ['pytest -q','python -m compileall','node --check','docker build','v022_settings.js']:
         assert required in workflow
     assert (ROOT/'requirements-dev.txt').is_file()
