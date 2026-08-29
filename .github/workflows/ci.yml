@@ -59,3 +59,10 @@ jobs:
           expected=yaml.safe_load(open('laufapp/config.yaml'))['version']
           assert data == {'ok': True, 'version': expected}, data
           PY
+          curl -fsS -D /tmp/root.headers -o /tmp/root.html http://127.0.0.1:18099/
+          grep -qi '^cache-control: no-store, max-age=0' /tmp/root.headers
+          grep -q 'assets/v022_settings.js?v=0.2.2' /tmp/root.html
+          curl -fsS -D /tmp/asset.headers -o /tmp/v022.js 'http://127.0.0.1:18099/assets/v022_settings.js?v=0.2.2'
+          grep -qi '^cache-control: no-store, max-age=0' /tmp/asset.headers
+          grep -q 'Planungsaggressivität' /tmp/v022.js
+          grep -q 'Rennen hinzufügen' /tmp/v022.js
