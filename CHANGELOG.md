@@ -1,5 +1,29 @@
 # Laufapp Changelog
 
+## v0.2.2 – 2026-08-29
+
+- Produktionsnahen Frontend-Auslieferungsfehler behoben: Der FastAPI-/Starlette-Mount `/assets` zeigte auf `static/` statt auf das tatsächliche Verzeichnis `static/assets/`. Dadurch wurden die v0.2-Erweiterungen im realen Add-on mit HTTP 404 beantwortet, während die Basis-UI weiter funktionierte.
+- Dadurch werden **mehrere A-/B-Rennen** unter Einstellungen und **Planungsaggressivität Konservativ / Moderat / Aggressiv** nun tatsächlich im Home-Assistant-Frontend ausgeliefert.
+- Bestehende v0.1.9-Styles unter `assets/bugfix.css` bleiben durch einen kompatiblen Asset-Pfad erhalten.
+- Alle relevanten Frontend-Assets sind mit `?v=0.2.2` versioniert; der PWA-Cache wurde auf `laufapp-v0.2.2` erhöht.
+- Frontend-Antworten erhalten `Cache-Control: no-store, max-age=0`, damit Home-Assistant-/iOS-WebViews nach Add-on-Updates keinen veralteten App-Shell-Stand weiterverwenden.
+- Neuer v0.2.2-Entry-Point korrigiert ausschließlich Version und statische Auslieferung und übernimmt die getestete v0.2.1-API-/Trainingslogik unverändert.
+- Docker-Runtime-Smoke-Test erweitert: Im gestarteten Container müssen `v020.js` und `v020_science.js` per HTTP erreichbar sein; A-/B-Rennbegriffe, die drei Aggressivitätsstufen, `/api/v2/races` und `/api/settings` werden explizit geprüft.
+- Keine Datenbankschemamigration; bestehende Health-Daten, Läufe, Schuhe, Rennen, Trainingsplan und Coach-Daten bleiben unverändert.
+- Validierung: Python-Compilecheck erfolgreich, JavaScript-Syntaxchecks erfolgreich, **82/82 Pytests**, 16-Wochen-Marathonsimulation erfolgreich, neun randomisierte Läuferprofile erfolgreich, Docker-Build und erweiterter Docker-Runtime-Smoke-Test erfolgreich.
+- Statisch/isoliert sowie im Linux-/Docker-CI getestet; Home-Assistant-/Nabu-Casa-/iPhone-Darstellung muss nach Installation auf dem Beelink real bestätigt werden.
+
+## v0.2.1 – 2026-08-29
+
+- Inkonsistenz zwischen Planbasis-Wochenziel und tatsächlich erzeugten Wochenkilometern behoben: Ein nachgelagerter Longrun-Anteils-Guardrail konnte den fertigen Plan bislang unter das zuvor berechnete Wochenziel drücken, ohne die entfernten Kilometer zurückzuverteilen.
+- Die normale 45-%-Longrun-Anteilsorientierung ist bei vollständig automatisch erzeugten Zukunftswochen wieder ein Belastungs-Guardrail statt eines zweiten pauschalen harten Caps. Reale verträgliche Longrun-Historie und `max_long_run_km` bleiben maßgeblich.
+- Ein bewusst strengerer Longrun-Anteil des Nutzers bleibt bindend. Muss ein Guardrail in einer gemischten/geschützten Woche Distanz entfernen, werden freie Kilometer nur auf flexible zukünftige Easy Runs verteilt, soweit sinnvoll.
+- Planbasis-Bezeichnungen präzisiert: **Trainingsbasis** statt „Aktueller Umfang“ und **Wochenziel** statt „Geplant“.
+- **Planungsaggressivität** mit drei Stufen ergänzt: Konservativ (`gradual`), Moderat (`steady`, Standard) und Aggressiv (`progressive`). Die Stufe steuert die bestehende deterministische Blockprogression; Wochen-/Longrun-Limits, Recovery/Readiness, Qualitätsbudget, Deload und Taper bleiben in allen Stufen bindend.
+- Regressionstests bilden explizit einen Fall mit ca. 60,9 km etablierter Basis, ca. 63–64 km Wochenziel, 32-km-Longrun-Historie und Nutzerobergrenze ab und prüfen außerdem die Reihenfolge Konservativ < Moderat < Aggressiv bei weiterhin bindenden Limits.
+- Validierung: Python-Compilecheck, JavaScript-Syntax, **82/82 Pytests**, 16-Wochen-Marathonsimulation, neun randomisierte Läuferprofile, Docker-Build und Docker-Runtime-Smoke-Test erfolgreich.
+- Keine Datenbankschemamigration.
+
 ## v0.2.0 – 2026-08-29
 
 - Mehrere zukünftige Wettkämpfe können unter **Einstellungen → Rennen** gepflegt, bearbeitet und gelöscht werden. Bestehende v0.1.9-Wettkämpfe werden kompatibel als A-Rennen behandelt.
