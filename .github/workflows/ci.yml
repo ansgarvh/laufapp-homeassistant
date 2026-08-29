@@ -35,6 +35,7 @@ jobs:
           node --check laufapp/app/static/app.js
           node --check laufapp/app/static/assets/v020.js
           node --check laufapp/app/static/assets/v020_science.js
+          node --check laufapp/app/static/assets/v023_aggressiveness.js
       - name: Full regression suite
         run: pytest -q
       - name: 16-week marathon simulation
@@ -60,24 +61,29 @@ jobs:
           PY
           curl -fsS -D /tmp/root.headers -o /tmp/root.html http://127.0.0.1:18099/
           grep -qi '^cache-control: no-store, max-age=0' /tmp/root.headers
-          grep -q 'assets/v020.js?v=0.2.2' /tmp/root.html
-          grep -q 'assets/v020_science.js?v=0.2.2' /tmp/root.html
-          curl -fsS -D /tmp/asset.headers -o /tmp/v020.js 'http://127.0.0.1:18099/assets/v020.js?v=0.2.2'
+          grep -q 'assets/v020.js?v=0.2.3' /tmp/root.html
+          grep -q 'assets/v020_science.js?v=0.2.3' /tmp/root.html
+          grep -q 'assets/v023_aggressiveness.js?v=0.2.3' /tmp/root.html
+          curl -fsS -D /tmp/asset.headers -o /tmp/v020.js 'http://127.0.0.1:18099/assets/v020.js?v=0.2.3'
           grep -qi '^cache-control: no-store, max-age=0' /tmp/asset.headers
           grep -q 'A-Rennen' /tmp/v020.js
           grep -q 'B-Rennen' /tmp/v020.js
           grep -q 'api/v2/races' /tmp/v020.js
-          curl -fsS -o /tmp/science.js 'http://127.0.0.1:18099/assets/v020_science.js?v=0.2.2'
+          curl -fsS -o /tmp/science.js 'http://127.0.0.1:18099/assets/v020_science.js?v=0.2.3'
           grep -q 'Planungsaggressivität' /tmp/science.js
-          grep -q 'Konservativ' /tmp/science.js
-          grep -q 'Moderat' /tmp/science.js
-          grep -q 'Aggressiv' /tmp/science.js
+          curl -fsS -o /tmp/v023.js 'http://127.0.0.1:18099/assets/v023_aggressiveness.js?v=0.2.3'
+          grep -q 'Sehr aggressiv' /tmp/v023.js
+          grep -q 'very_progressive' /tmp/v023.js
           curl -fsS -o /tmp/races.json http://127.0.0.1:18099/api/v2/races
           curl -fsS -o /tmp/settings.json http://127.0.0.1:18099/api/settings
+          curl -fsS -o /tmp/aggressiveness.json http://127.0.0.1:18099/api/v2/settings/aggressiveness
           python - <<'PY'
           import json
           races=json.load(open('/tmp/races.json'))
           settings=json.load(open('/tmp/settings.json'))
+          aggression=json.load(open('/tmp/aggressiveness.json'))
           assert isinstance(races,list), races
           assert settings.get('training_volume_profile') in {'gradual','steady','progressive'}, settings
+          assert settings.get('training_aggressiveness_level') in {'gradual','steady','progressive','very_progressive'}, settings
+          assert aggression.get('training_volume_profile') in {'gradual','steady','progressive','very_progressive'}, aggression
           PY
