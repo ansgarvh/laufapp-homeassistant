@@ -1,0 +1,31 @@
+name: Laufapp
+options:
+  bundleIdPrefix: de.ansgarvh
+settings:
+  base:
+    SWIFT_VERSION: 5.10
+    IPHONEOS_DEPLOYMENT_TARGET: 17.0
+targets:
+  Laufapp:
+    type: application
+    platform: iOS
+    sources:
+      - path: Laufapp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.ansgarvh.laufapp
+        CODE_SIGN_ENTITLEMENTS: Laufapp/Laufapp.entitlements
+        TARGETED_DEVICE_FAMILY: 1
+        MARKETING_VERSION: 0.3.0
+        CURRENT_PROJECT_VERSION: 1
+    info:
+      path: Laufapp/Info.plist
+      properties:
+        CFBundleDisplayName: Laufapp
+        UILaunchScreen: {}
+        NSHealthShareUsageDescription: Laufapp liest deine Apple-Health-Lauf- und Erholungsdaten, um Training, Prognosen und Laufanalysen lokal zu aktualisieren.
+        NSLocationWhenInUseUsageDescription: GPS-Daten werden ausschließlich aus bereits aufgezeichneten HealthKit-Workout-Routen gelesen.
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+    scheme:
+      testTargets: []
