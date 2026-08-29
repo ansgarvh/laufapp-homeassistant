@@ -122,6 +122,13 @@ def _history_supported_long_plan(self, c, race, ws, phase, total_km, readiness):
     paces = planner.training_paces(c, race)
     previous_mp = float(decision.session.metadata.get("mp_km", 0) or 0)
     if decision.primary_progression == "marathon_pace" and previous_mp > 0:
+        # MP is the primary progression dimension. If the immediately preceding
+        # Long Run was shorter (often a deload), do not simultaneously restore a
+        # large amount of distance and add/increase MP. Keep the distance increase
+        # to roughly one kilometre and let the later easy Long Run rebuild length.
+        immediate_previous = float(decision.previous_distance_km or 0)
+        if immediate_previous > 0 and desired > immediate_previous + 1.2:
+            desired = round(min(desired, immediate_previous + 1.0), 1)
         mp_km = min(previous_mp, desired * 0.45)
         load = self._load(desired, mp_km, "mp_blocks", paces, 6.5)
         session = replace(
@@ -131,12 +138,12 @@ def _history_supported_long_plan(self, c, race, ws, phase, total_km, readiness):
             load=load,
             why=(
                 decision.session.why
-                + f" Deine jüngere Longrun-Historie bis {longest:g} km erlaubt diese Distanz, "
-                  "ohne gleichzeitig den Marathonpace-Anteil weiter zu erhöhen."
+                + f" Deine jüngere Longrun-Historie reicht bis {longest:g} km; "
+                  "weil heute Marathonpace die Hauptprogression ist, wird die Distanz gegenüber dem unmittelbar vorherigen Longrun nicht gleichzeitig stark angehoben."
             ),
             metadata=dict(decision.session.metadata) | {"mp_km": round(mp_km, 1), "history_supported_share": True},
         )
-        return LongRunDecision(session, "marathon_pace", longest, decision.previous_mp_km)
+        return LongRunDecision(session, "marathon_pace", immediate_previous or longest, decision.previous_mp_km)
 
     # If history support is what permits the longer run, distance is the sole
     # primary progression. Keep the session easy rather than also progressing
