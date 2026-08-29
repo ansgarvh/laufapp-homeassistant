@@ -4,18 +4,19 @@ ROOT=Path(__file__).resolve().parents[1]
 
 def test_versions_and_assets():
     cfg=yaml.safe_load((ROOT/'laufapp/config.yaml').read_text())
-    assert cfg['version']=='0.2.0'
-    assert 'APP_VERSION = "0.2.0"' in (ROOT/'laufapp/app/main_v020.py').read_text()
-    assert 'ARG BUILD_VERSION=0.2.0' in (ROOT/'laufapp/Dockerfile').read_text()
-    assert 'main_v020:app' in (ROOT/'laufapp/run.sh').read_text()
+    assert cfg['version']=='0.2.1'
+    assert 'APP_VERSION = "0.2.1"' in (ROOT/'laufapp/app/main_v021.py').read_text()
+    assert 'ARG BUILD_VERSION=0.2.1' in (ROOT/'laufapp/Dockerfile').read_text()
+    assert 'main_v021:app' in (ROOT/'laufapp/run.sh').read_text()
     static=ROOT/'laufapp/app/static'
-    for name in ['index.html','styles.css','bugfix.css','app.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','assets/v020.js','assets/v020.css']:assert (static/name).exists()
+    for name in ['index.html','styles.css','bugfix.css','app.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','assets/v020.js','assets/v020.css','assets/v020_science.js','assets/v020_science.css']:assert (static/name).exists()
     m=json.loads((static/'manifest.webmanifest').read_text());assert m['display']=='standalone'
-    assert "const CACHE='laufapp-v0.2.0'" in (static/'sw.js').read_text()
+    assert "const CACHE='laufapp-v0.2.1'" in (static/'sw.js').read_text()
     index=(static/'index.html').read_text()
     assert 'assets/bugfix.css' in index and 'assets/v020.css' in index and 'assets/v020.js' in index
     subprocess.run(['node','--check',str(static/'app.js')],check=True)
     subprocess.run(['node','--check',str(static/'assets/v020.js')],check=True)
+    subprocess.run(['node','--check',str(static/'assets/v020_science.js')],check=True)
 
 def test_ha_app_config():
     cfg=yaml.safe_load((ROOT/'laufapp/config.yaml').read_text())
