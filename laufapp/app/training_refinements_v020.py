@@ -8,6 +8,7 @@ from typing import Any
 import training as base
 import training_adaptation_v020 as adaptation
 import training_planner_v020 as planner
+from db import get_setting
 from training_models_v020 import (
     LongRunDecision,
     PhysiologicalTarget,
@@ -102,7 +103,7 @@ def _history_supported_long_plan(self, c, race, ws, phase, total_km, readiness):
 
     prefs = base._prefs(c, float(race["distance_km"]))
     configured_max = float(prefs["max_long"])
-    run_days = max(3, min(7, len(base.get_setting(c, "training_days", [1, 3, 4, 6])))) if hasattr(base, "get_setting") else 4
+    run_days = max(3, min(7, len(get_setting(c, "training_days", [1, 3, 4, 6]))))
     # Reserve enough room for the other sessions instead of allowing a Long Run
     # to consume the entire week. Four days therefore keep roughly 12 km outside
     # the Long Run; higher frequencies reserve at least 3 km per other session.
