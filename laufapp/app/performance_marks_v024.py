@@ -40,7 +40,7 @@ def detect_apple_health_best_efforts(c, training, months: int = 24) -> list[dict
 
     We deliberately only accept workouts very close to the standard distance.
     Without cumulative-distance samples a 30 km workout must not be treated as a
-    measured half-marathon split.  Small GPS/watch distance deviations are
+    measured half-marathon split. Small GPS/watch distance deviations are
     normalized with the same Riegel model used by the existing prediction
     engine.
     """
@@ -181,14 +181,18 @@ def predict_distance_v024(c, target: float, training) -> dict[str, Any] | None:
 
     evidence.sort(key=lambda x: (-x["score"], x["predicted"]))
     top_score = evidence[0]["score"]
-    eligible = [p for p in evidence if p["score"] >= top_score * 0.60]
+    # Lower-confidence training evidence must be allowed to demonstrate genuine
+    # improvement versus an older PB. The confirmed PB remains protected by the
+    # conservative blend below, so this wider evidence gate cannot replace it
+    # one-for-one.
+    eligible = [p for p in evidence if p["score"] >= top_score * 0.45]
     selected = min(eligible, key=lambda x: x["predicted"])
 
     confirmed = [p for p in evidence if p["source"] in CONFIRMED_SOURCES]
     best_confirmed = min(confirmed, key=lambda x: x["predicted"]) if confirmed else None
 
     base_pred = selected["predicted"]
-    # Confirmed PB = hard capability anchor.  Faster recent evidence may improve
+    # Confirmed PB = hard capability anchor. Faster recent evidence may improve
     # the estimate, but a single lower-confidence training run is blended rather
     # than replacing the race result outright.
     if best_confirmed:
