@@ -11,6 +11,7 @@ import coach as coach_module
 import db as db_module
 import main as legacy
 import training as legacy_training
+import training_adaptation_v020 as adaptation_module
 import training_v020 as training
 from db import db_conn, get_setting, set_setting
 from training_adaptation_v020 import (
@@ -22,9 +23,15 @@ from training_adaptation_v020 import (
     save_workout_feedback,
 )
 from training_guardrails_v020 import enforce_generated_long_run_share
+from training_refinements_v020 import apply_training_refinements
 
 APP_VERSION = "0.2.0"
 db_module.APP_VERSION = APP_VERSION
+
+# Apply simulator-driven refinements before wiring the planner into the mature
+# API surface. The adaptation function is rebound because it was imported above.
+apply_training_refinements()
+adaptation_suggestion = adaptation_module.adaptation_suggestion
 
 # A mid-week explicit refresh keeps past/completed/manual rows. Re-apply the
 # existing long-run-share guardrail only to the newly generated planned Long Run
