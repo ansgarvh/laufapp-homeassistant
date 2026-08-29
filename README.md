@@ -11,6 +11,7 @@ Private, mobile-first Lauf-PWA für Home Assistant OS auf dem Beelink Mini S12. 
 - **Wissenschaftlich orientierte Marathonengine:** die lokale, LLM-unabhängige Planung trennt Trainingsphase, physiologisches Ziel, Workoutform, Belastung und Recovery. Qualität wird nicht mehr nach einem festen Wochentagsmuster ausgewählt.
 - **Workout Variation Engine:** zuerst wird der gewünschte Reiz festgelegt (u. a. Schwelle, VO₂max, Ökonomie, Marathonpace, aerobe Progression, Hügel), danach deterministisch eine passende Form gewählt. Die Historie der Qualitätseinheiten verhindert unnötige identische Wiederholungen in kurzem Abstand.
 - **Longrun-Progression:** Easy, Progression, Fast Finish, MP-Blöcke und Deload werden getrennt geplant. Distanz und Intensität werden nicht regelmäßig gleichzeitig stark erhöht. Reale Longrun-Historie kann 30–35-km-Peakläufe ermöglichen, das Nutzermaximum bleibt hart.
+- **Qualitätsbudget:** intensive Longruns zählen als Qualitätsreiz. Ist nur eine Qualitätseinheit pro Woche konfiguriert, verbraucht ein MP-/intensiver Longrun dieses Budget; der andere strukturierte Lauf wird dann nur als kleine Ökonomie-/Aktivierungseinheit dosiert statt als zweite harte Schwellen-/VO₂max-Einheit.
 - **Aktuelle statt blinde Zielpace:** Goal Marathon Pace und Current Estimated Marathon Pace sind getrennt; Trainingsgeschwindigkeiten folgen primär dem aktuell gestützten Leistungsniveau.
 - **Rollierende Intensitätssteuerung:** niedrig/moderat/hoch wird über vier Wochen bewertet. Der Marathonplan bleibt deutlich niedrigintensiv dominiert; Prozentbereiche sind Orientierungen und keine starren Grenzwerte.
 - **Readiness + subjektives Feedback:** persönliche HRV-/Ruhepuls-Baseline, Schlaf, RPE, Beine, Schmerzen, Erholung und vorhandene Laufreaktionen werden kombiniert. Ein einzelner HRV-Wert entscheidet nicht allein. Änderungen bleiben bestätigungspflichtige Vorschläge.
@@ -18,6 +19,7 @@ Private, mobile-first Lauf-PWA für Home Assistant OS auf dem Beelink Mini S12. 
 - **Blockprogression:** Build-/Specific-Belastungswochen werden nicht mehr jede Woche isoliert aus derselben Basis berechnet. Innerhalb eines Belastungsblocks kann der Umfang deterministisch ansteigen; Recovery, Taper, Detraining und Nutzerlimits bleiben wirksam.
 - **Schuh nachträglich zuordnen:** Ein absolvierter, mit einem realen Lauf verknüpfter Wochenplan-Eintrag kann direkt einem Schuh zugeordnet werden. Die Kilometer des realen Laufs fließen sofort in die bestehende Schuhbilanz ein. Die Zuordnung im Fortschritt-Tab bleibt ebenfalls möglich.
 - **16-Wochen-Simulation in CI:** ein kompletter Marathonzyklus wird synthetisch geplant, absolviert und Woche für Woche erneut aus der entstandenen Historie berechnet. Geprüft werden Variation, Deload, MP-Longruns, Taper, Belastungsvektor, Intensitätsverteilung, VO₂max-Dosierung und der vollständige Zielmarathon.
+- **Neun reproduzierbar randomisierte Läuferprofile in CI:** 3–7 Lauftage, 1–3 Qualitätseinheiten, etwa 25–100 km etablierter Wochenumfang, unterschiedliche Leistungsstände, Nutzerlimits, automatische Limits, ambitionierte Zielzeiten, Detraining und B-Rennen werden über komplette Trainingsblöcke simuliert. Die Tests prüfen u. a. Wochen-/Longrun-Grenzen, Qualitätsbudget, Longrun-Distanz-vs.-Intensität, Zielpace-Cap, Workoutvariation und DB-Integrität.
 - **Kompatibel zu v0.1.9:** keine neue Datenbankschemaversion; bestehende Rennen werden bei fehlender A/B-Klassifikation als A-Rennen behandelt. Health-Daten, Läufe, Schuhe, manuelle Planänderungen und Ingress-Schutz bleiben erhalten.
 
 Ausführliche Trainingslogik und Evidenzabgrenzung: **`TRAINING_ENGINE.md`**. Insbesondere die alternierende Longrun-Distanz/MP-Strategie und konkrete Workoutrotationen werden dort als konservative evidenzinformierte Designableitungen dokumentiert, nicht als direkt bewiesene überlegene Sequenzen.
@@ -81,7 +83,7 @@ Zeiträume sind rollierende Kalendermonate bis heute; die angebrochene aktuelle 
 - **Apple Health als Hintergrundjob:** Nach abgeschlossenem Upload kann der Browser bzw. die Home-Assistant-App geschlossen oder minimiert werden. Der Beelink verarbeitet die Datei weiter. Status und Ergebnis bleiben abrufbar; ein durch App-Neustart unterbrochener Verarbeitungsjob wird beim nächsten Start erneut aufgenommen.
 - **Detaillierte Laufdaten:** Soweit Apple sie exportiert, werden zeitaufgelöste Herzfrequenz, Running Speed, Running Power, Schrittlänge, vertikale Oszillation, Bodenkontaktzeit, abgeleitete Kadenz sowie GPX-/Höhendaten einem Lauf zugeordnet.
 - **GitHub-Umzug vorbereitet:** v0.1.3 enthält einen sicheren Einmal-Transfer von der bisherigen lokalen Home-Assistant-App zur späteren GitHub-Repository-App, ohne erneuten Health-Import.
-- **GitHub CI vorbereitet:** Compilecheck, JavaScript-Syntaxcheck, vollständige Pytest-Regression und Docker-Build laufen künftig bei Push/PR automatisch.
+- **GitHub CI vorbereitet:** Compilecheck, JavaScript-Syntaxcheck, vollständige Regressionstests und Docker-Build laufen künftig bei Push/PR automatisch.
 
 ## Bestehende Funktionen
 
@@ -121,7 +123,7 @@ Standardmodelle: `gpt-5.6-terra` für den Coach und `gpt-5.6-luna` für Screensh
 
 ## Teststatus
 
-Die automatisierte GitHub-CI prüft Python-Compilecheck, JavaScript-Syntax, vollständige Pytest-Regression, die eigenständige 16-Wochen-Marathonsimulation, den Home-Assistant-Docker-Build und einen Docker-Runtime-Smoke-Test gegen `/api/health`. Der final validierte v0.2-Branch besteht **69/69 Pytests** plus den vollständigen 16-Wochen-Simulator. Zusätzlich enthält die Testsuite synthetische End-to-End-, Migrations-, Ingress-, Health-Import-, Trainingsplan- und UI-Regressionsprüfungen.
+Die automatisierte GitHub-CI prüft Python-Compilecheck, JavaScript-Syntax, vollständige Pytest-Regression, die eigenständige 16-Wochen-Marathonsimulation, **neun reproduzierbar randomisierte Läuferprofile**, den Home-Assistant-Docker-Build und einen Docker-Runtime-Smoke-Test gegen `/api/health`. Der final validierte v0.2-Branch besteht **78/78 Pytests** plus dem vollständigen 16-Wochen-Simulator und dem separaten 9-Profil-Simulator. Zusätzlich enthält die Testsuite synthetische End-to-End-, Migrations-, Ingress-, Health-Import-, Trainingsplan- und UI-Regressionsprüfungen.
 
 Statisch/isoliert getestet; Home-Assistant-Integration muss lokal auf dem Beelink verifiziert werden. Reale iPhone-/Nabu-Casa-Interaktionen sind nicht Bestandteil der isolierten CI.
 
