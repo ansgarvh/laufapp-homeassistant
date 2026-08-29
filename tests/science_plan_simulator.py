@@ -50,6 +50,12 @@ def validate_plan(rows):
     assert len(rows)==16
     assert rows[-1]['phase']=='race'
     assert rows[-2]['phase']=='taper' and rows[-3]['phase']=='taper'
+    # A user-entered marathon is an event, not taper volume that may be scaled.
+    assert 42.15<=rows[-1]['longrun_km']<=42.25,rows[-1]
+    # VO2max gets a deliberate but limited Build-phase exposure and then recedes.
+    build=[r for r in rows if r['phase']=='build']
+    assert any(r['quality_target']=='vo2max' for r in build),build
+    assert not any(r['quality_target']=='vo2max' for r in rows[-3:]),rows[-3:]
     deloads=[r for r in rows if r['phase']=='recovery'];assert len(deloads)>=2
     qualities=[r for r in rows if r['quality']!='—'];assert len(set(r['quality'] for r in qualities))>=5
     for a,b in zip(qualities,qualities[1:]):assert a['quality']!=b['quality'] or a['phase']=='taper'
