@@ -59,6 +59,14 @@ def validate_plan(rows):
     deloads=[r for r in rows if r['phase']=='recovery'];assert len(deloads)>=2
     qualities=[r for r in rows if r['quality']!='—'];assert len(set(r['quality'] for r in qualities))>=5
     for a,b in zip(qualities,qualities[1:]):assert a['quality']!=b['quality'] or a['phase']=='taper'
+    # Exact workout-form repetition is allowed eventually, but not again after
+    # only a few training weeks when equivalent variants exist.
+    last_quality_week={}
+    for r in qualities:
+        previous_week=last_quality_week.get(r['quality'])
+        if previous_week is not None:
+            assert r['week']-previous_week>=5,(previous_week,r)
+        last_quality_week[r['quality']]=r['week']
     specific=[r for r in rows if r['phase']=='specific'];mp=[r for r in specific if r['mp_km']>0];assert 2<=len(mp)<=4
     previous=None
     for r in rows:
