@@ -3,17 +3,16 @@ from __future__ import annotations
 import json
 from datetime import date
 
+import training as base
 from db import get_setting
 
 
 def enforce_generated_long_run_share(c, workouts: list[dict]) -> list[dict]:
     """Keep Long-Run share as a contextual guardrail, not a universal ceiling.
 
-    The default 45% share is an orientation signal. A marathon Long Run that is
-    explicitly supported by recent completed Long-Run history may exceed that
-    orientation, including in the current week. A deliberately tighter user
-    setting below the normal 45% default remains authoritative for compatibility,
-    especially during a mid-week refresh that preserves completed/manual rows.
+    The default 45% share is an orientation signal. A marathon Long Run supported
+    by recent completed Long-Run history may exceed that orientation. A deliberately
+    tighter user setting below the normal 45% default remains authoritative.
     """
     if any(w.get("workout_type") == "race" for w in workouts):
         return workouts
@@ -50,16 +49,28 @@ def enforce_generated_long_run_share(c, workouts: list[dict]) -> list[dict]:
         for w in workouts
     )
 
+    long_km = float(long_row.get("distance_km") or 0)
+    week_ref = date.fromisoformat(str(long_row["week_start"]))
+    history = base.long_run_history(c, week_ref)
+    longest_recent = max(float(history.get("longest_4w") or 0), float(history.get("longest_8w") or 0))
+    phase = str(details.get("phase") or "")
+    max_long = float(get_setting(c, "max_long_run_km", 35.0))
+    inferred_history_supported = (
+        phase in {"build", "specific"}
+        and longest_recent >= 24.0
+        and long_km <= max_long + 0.05
+        and long_km <= longest_recent + 3.0
+    )
+    history_supported = bool(details.get("history_supported_share")) or inferred_history_supported
+
     # A history-supported peak Long Run is allowed to exceed the normal 45%
-    # orientation. If the user has deliberately configured a stricter share
-    # (<45%), keep enforcing it. max_long_run_km remains a separate hard ceiling.
-    history_supported = bool(details.get("history_supported_share"))
+    # orientation. If the user deliberately configured a stricter share (<45%),
+    # keep enforcing it. max_long_run_km remains the hard distance ceiling.
     if history_supported and cap >= 0.445:
         return workouts
     if history_supported and not protected_context:
         return workouts
 
-    long_km = float(long_row.get("distance_km") or 0)
     if long_km / total <= cap + 0.005:
         return workouts
     other = max(0.0, total - long_km)
