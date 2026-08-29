@@ -38,6 +38,8 @@ jobs:
         run: pytest -q
       - name: 16-week marathon simulation
         run: python tests/science_plan_simulator.py
+      - name: Nine randomized runner simulations
+        run: python tests/randomized_runner_simulator.py
       - name: Docker build
         run: docker build --pull --build-arg BUILD_VERSION=$(python -c "import yaml; print(yaml.safe_load(open('laufapp/config.yaml'))['version'])") --build-arg BUILD_ARCH=amd64 -t laufapp-ci:${{ github.sha }} laufapp
       - name: Docker runtime smoke test
