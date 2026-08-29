@@ -1,18 +1,19 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 
 from db import get_setting
 
 
 def enforce_generated_long_run_share(c, workouts: list[dict]) -> list[dict]:
-    """Keep the existing user long-run-share limit meaningful after replanning.
+    """Apply the legacy share cap only when the current week is partly protected.
 
-    A mid-week refresh intentionally preserves past/completed/manual sessions. If
-    only the future Long Run is regenerated, its original template distance can
-    otherwise become too large relative to the actually retained week. Only an
-    engine-generated, still-planned Long Run is adjusted; races, completed rows
-    and manual overrides remain authoritative.
+    The share setting is a guardrail, not a universal generator ceiling. A future
+    clean marathon week may deliberately contain a history-supported peak Long Run
+    above the usual share. During a mid-week refresh, however, past/completed/manual
+    rows are preserved; in that situation the newly generated Long Run is still
+    capped so the retained week cannot become accidentally disproportionate.
     """
     if any(w.get("workout_type") == "race" for w in workouts):
         return workouts
@@ -30,8 +31,29 @@ def enforce_generated_long_run_share(c, workouts: list[dict]) -> list[dict]:
     if len(long_rows) != 1:
         return workouts
     long_row = long_rows[0]
+
+    row = c.execute("SELECT details_json FROM workouts WHERE id=?", (int(long_row["id"]),)).fetchone()
+    try:
+        details = json.loads(row["details_json"] or "{}") if row else {}
+    except Exception:
+        details = {}
+
+    today = date.today().isoformat()
+    protected_context = any(
+        int(w.get("id") or 0) != int(long_row["id"])
+        and (
+            w.get("status") != "planned"
+            or int(w.get("manual_override") or 0)
+            or str(w.get("modified_by") or "engine") != "engine"
+            or str(w.get("scheduled_date") or "") < today
+        )
+        for w in workouts
+    )
+    if details.get("history_supported_share") and not protected_context:
+        return workouts
+
     long_km = float(long_row.get("distance_km") or 0)
-    if total <= 0 or long_km / total <= cap + 0.005:
+    if long_km / total <= cap + 0.005:
         return workouts
     other = max(0.0, total - long_km)
     if other <= 0 or cap >= 0.999:
@@ -42,11 +64,7 @@ def enforce_generated_long_run_share(c, workouts: list[dict]) -> list[dict]:
     new_km = round(max(6.0, allowed), 1)
     if new_km >= long_km:
         return workouts
-    row = c.execute("SELECT details_json FROM workouts WHERE id=?", (int(long_row["id"]),)).fetchone()
-    try:
-        details = json.loads(row["details_json"] or "{}") if row else {}
-    except Exception:
-        details = {}
+
     factor = new_km / max(long_km, 0.001)
     load = details.get("load") or {}
     for key in (
@@ -62,7 +80,7 @@ def enforce_generated_long_run_share(c, workouts: list[dict]) -> list[dict]:
     previous_why = str(details.get("why") or "").strip()
     guardrail_text = (
         "Die Distanz wurde zusätzlich durch deine eingestellte Longrun-Anteilsgrenze "
-        "begrenzt, weil bereits absolvierte oder geschützte Einheiten dieser Woche erhalten bleiben."
+        "begrenzt, weil bereits absolvierte, vergangene oder geschützte Einheiten dieser Woche erhalten bleiben."
     )
     details["why"] = f"{previous_why} {guardrail_text}".strip()
     c.execute(
