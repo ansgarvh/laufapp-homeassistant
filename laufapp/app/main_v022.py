@@ -6,6 +6,9 @@ aggressiveness) live in versioned assets and must never be served stale after an
 add-on update.
 """
 
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+
 import main_v021 as previous
 
 APP_VERSION = "0.2.2"
@@ -18,6 +21,21 @@ previous.previous.legacy.app.version = APP_VERSION
 previous.previous.training.VERSION = APP_VERSION
 
 app = previous.app
+STATIC = previous.previous.legacy.STATIC
+
+# v0.2.x assets are physically stored below static/assets. The legacy mount used
+# the static root itself, which made /assets/v020.js resolve to static/v020.js
+# and therefore return 404. This is why A/B races, science UI and planner
+# aggressiveness were present in the repository but invisible in the real app.
+for route in app.routes:
+    if getattr(route, "path", None) == "/assets":
+        route.app = StaticFiles(directory=STATIC / "assets")
+        break
+
+
+@app.get("/bugfix.css")
+def bugfix_css():
+    return FileResponse(STATIC / "bugfix.css", media_type="text/css", headers={"Cache-Control": "no-store, max-age=0"})
 
 
 @app.middleware("http")
@@ -29,6 +47,7 @@ async def frontend_cache_control(request, call_next):
         or path.endswith("/index.html")
         or path.endswith("/app.js")
         or path.endswith("/styles.css")
+        or path.endswith("/bugfix.css")
         or path.endswith("/sw.js")
         or "/assets/" in path
     ):
