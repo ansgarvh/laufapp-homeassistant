@@ -4,10 +4,10 @@ ROOT=Path(__file__).resolve().parents[1]
 
 def test_versions_and_assets():
     cfg=yaml.safe_load((ROOT/'laufapp/config.yaml').read_text())
-    assert cfg['version']=='0.2.3'
-    assert 'APP_VERSION = "0.2.3"' in (ROOT/'laufapp/app/main_v023.py').read_text()
-    assert 'ARG BUILD_VERSION=0.2.3' in (ROOT/'laufapp/Dockerfile').read_text()
-    assert 'main_v023:app' in (ROOT/'laufapp/run.sh').read_text()
+    assert cfg['version']=='0.2.4'
+    assert 'APP_VERSION = "0.2.4"' in (ROOT/'laufapp/app/main_v024.py').read_text()
+    assert 'ARG BUILD_VERSION=0.2.4' in (ROOT/'laufapp/Dockerfile').read_text()
+    assert 'main_v024:app' in (ROOT/'laufapp/run.sh').read_text()
     static=ROOT/'laufapp/app/static'
     for name in ['index.html','styles.css','bugfix.css','app.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','assets/bugfix.css','assets/v020.js','assets/v020.css','assets/v020_science.js','assets/v020_science.css','assets/v023_aggressiveness.js']:assert (static/name).exists()
     m=json.loads((static/'manifest.webmanifest').read_text());assert m['display']=='standalone'
