@@ -1,6 +1,6 @@
 'use strict';
-const CACHE='laufapp-v0.1.9';
-const staticUrls=()=>['./','styles.css','app.js','manifest.webmanifest','icon-192.png','assets/bugfix.css'].map(p=>new URL(p,self.registration.scope).toString());
+const CACHE='laufapp-v0.2.0';
+const staticUrls=()=>['./','styles.css','app.js','manifest.webmanifest','icon-192.png','assets/bugfix.css','assets/v020.css','assets/v020.js','assets/v020_science.css','assets/v020_science.js'].map(p=>new URL(p,self.registration.scope).toString());
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(c=>c.addAll(staticUrls())).catch(()=>{}));self.skipWaiting();});
 self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim();});
 self.addEventListener('fetch',event=>{
