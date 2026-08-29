@@ -35,6 +35,7 @@ jobs:
           node --check laufapp/app/static/app.js
           node --check laufapp/app/static/assets/v020.js
           node --check laufapp/app/static/assets/v020_science.js
+          node --check laufapp/app/static/assets/v022_settings.js
       - name: Full regression suite
         run: pytest -q
       - name: 16-week marathon simulation
