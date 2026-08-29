@@ -177,11 +177,12 @@ def _load_score(low:float,moderate:float,high:float,duration:float,rpe:float,lon
     return round(score,1)
 
 
-def _estimate_quality_session(c,race,phase,target,variant,total_km,hard_long,readiness)->PlannedSession:
+def _estimate_quality_session(c,race,phase,target,variant,total_km,hard_long,readiness,dose_scale:float=1.0)->PlannedSession:
     paces=training_paces(c,race);zone=paces.get(variant.intensity_zone,paces["threshold"]);pace_mid=sum(zone)/2
     work_km=variant.work_distance_km or variant.work_minutes*60/max(pace_mid,1);warm_cool=4 if total_km>=45 else 3;distance=work_km+warm_cool
     scale={TrainingPhase.FOUNDATION:.84,TrainingPhase.BUILD:1,TrainingPhase.SPECIFIC:1.08,TrainingPhase.RECOVERY:.62,TrainingPhase.TAPER:.62}.get(phase,1)
     if hard_long:scale*=.72
+    scale*=max(.25,min(1.0,float(dose_scale)))
     if readiness.level is ReadinessLevel.YELLOW:scale*=.86
     elif readiness.level is ReadinessLevel.RED:scale*=.65
     distance=max(6,min(total_km*.24,distance*scale));work_min=variant.work_minutes*scale;total_min=distance*sum(paces["easy"])/2/60
@@ -290,10 +291,17 @@ def build_week_sessions(c,race,ws,total_km,phase,readiness)->WeeklyPlanDecision:
         easy_count=max(1,run_days-2);remaining=max(6,total_km-float(race["distance_km"])-5);easies=[easy_session(c,race,max(3,remaining/easy_count),i,phase) for i in range(easy_count)]
         load=TrainingLoad(5,28,"marathon",20,8,0,8,0,0,8,0,0,5,_load_score(20,8,0,28,5));activation=PlannedSession("raceprep","RACE PREP · kurze MP-Aktivierung",5,"marathon","5/10","Aktivierung ohne Ermüdung","Locker einlaufen, wenige kurze Abschnitte in aktueller Marathonpace, früh beenden.",PhysiologicalTarget.MARATHON_SPECIFIC,"raceprep",WorkoutType.RACE_PREP.value,load,"Kurze Intensität bleibt erhalten, während das Volumen stark reduziert ist.",{})
         sessions=easies+[activation,long_decision.session];return WeeklyPlanDecision(tuple(sessions),phase,readiness,projected_rolling_distribution(c,ws,sessions),"Wettkampf + Frische")
-    variation=WorkoutVariationEngine();target=_quality_focus(phase,weeks,hard_long);dose=.65 if hard_long else 1
+    configured=max(1,min(3,int(get_setting(c,"quality_sessions_per_week",2))));variation=WorkoutVariationEngine();target=_quality_focus(phase,weeks,hard_long)
+    single_quality_consumed_by_long=hard_long and configured<=1
+    if single_quality_consumed_by_long:
+        # The configured single hard stimulus is already the Long Run. Keep the
+        # other structured day as a small neuromuscular/economy activation, not
+        # a second threshold/VO2 session disguised as "reduced" quality.
+        target=PhysiologicalTarget.ECONOMY
+    dose=.45 if single_quality_consumed_by_long else .65 if hard_long else 1
     if phase in {TrainingPhase.RECOVERY,TrainingPhase.TAPER}:dose*=.65
-    variant=variation.select(c,ws,phase if phase is not TrainingPhase.RECOVERY else TrainingPhase.TAPER,target,dose);quality=_estimate_quality_session(c,race,phase,target,variant,total_km,hard_long,readiness)
-    configured=max(1,min(3,int(get_setting(c,"quality_sessions_per_week",2))));quality_slots=2 if run_days>=6 and configured>=2 and not hard_long and readiness.level is ReadinessLevel.GREEN and phase in {TrainingPhase.BUILD,TrainingPhase.SPECIFIC} else 1;qualities=[quality]
+    variant=variation.select(c,ws,phase if phase is not TrainingPhase.RECOVERY else TrainingPhase.TAPER,target,dose);quality=_estimate_quality_session(c,race,phase,target,variant,total_km,hard_long,readiness,.55 if single_quality_consumed_by_long else 1.0)
+    quality_slots=2 if run_days>=6 and configured>=2 and not hard_long and readiness.level is ReadinessLevel.GREEN and phase in {TrainingPhase.BUILD,TrainingPhase.SPECIFIC} else 1;qualities=[quality]
     if quality_slots==2:
         secondary=PhysiologicalTarget.ECONOMY if target is not PhysiologicalTarget.ECONOMY else PhysiologicalTarget.THRESHOLD;v2=variation.select(c,ws+timedelta(days=1),phase,secondary,.58);qualities.append(_estimate_quality_session(c,race,phase,secondary,v2,total_km,False,readiness))
     used=sum(x.distance_km for x in qualities)+long_decision.session.distance_km;easy_slots=max(1,run_days-len(qualities)-1);easy_km=max(3,(total_km-used)/easy_slots);easies=[easy_session(c,race,easy_km,i,phase) for i in range(easy_slots)]
@@ -307,6 +315,6 @@ def build_week_sessions(c,race,ws,total_km,phase,readiness)->WeeklyPlanDecision:
     rolling=projected_rolling_distribution(c,ws,sessions)
     if rolling["low_pct"]<70 and readiness.level is not ReadinessLevel.GREEN:
         for i,x in enumerate(sessions):
-            if x.workout_type=="quality":sessions[i]=_estimate_quality_session(c,race,phase,target,variant,total_km,hard_long,RecoveryState(ReadinessLevel.RED,readiness.score,readiness.reasons,readiness.signals));break
+            if x.workout_type=="quality":sessions[i]=_estimate_quality_session(c,race,phase,target,variant,total_km,hard_long,RecoveryState(ReadinessLevel.RED,readiness.score,readiness.reasons,readiness.signals),.55 if single_quality_consumed_by_long else 1.0);break
         rolling=projected_rolling_distribution(c,ws,sessions)
     return WeeklyPlanDecision(tuple(sessions),phase,readiness,rolling,TARGET_LABELS.get(target,target.value))
