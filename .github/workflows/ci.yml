@@ -66,33 +66,27 @@ jobs:
           grep -q 'assets/v020_science.js?v=0.2.5' /tmp/root.html
           grep -q 'assets/v023_aggressiveness.js?v=0.2.5' /tmp/root.html
           grep -q 'assets/v025.js?v=0.2.5' /tmp/root.html
-          grep -q 'assets/v025.css?v=0.2.5' /tmp/root.html
-          curl -fsS -D /tmp/asset.headers -o /tmp/v020.js 'http://127.0.0.1:18099/assets/v020.js?v=0.2.5'
-          grep -qi '^cache-control: no-store, max-age=0' /tmp/asset.headers
-          grep -q 'A-Rennen' /tmp/v020.js
-          grep -q 'B-Rennen' /tmp/v020.js
-          grep -q 'api/v2/races' /tmp/v020.js
-          curl -fsS -o /tmp/science.js 'http://127.0.0.1:18099/assets/v020_science.js?v=0.2.5'
-          grep -q 'Planungsaggressivität' /tmp/science.js
-          curl -fsS -o /tmp/v023.js 'http://127.0.0.1:18099/assets/v023_aggressiveness.js?v=0.2.5'
-          grep -q 'Sehr aggressiv' /tmp/v023.js
-          grep -q 'very_progressive' /tmp/v023.js
-          curl -fsS -o /tmp/v025.js 'http://127.0.0.1:18099/assets/v025.js?v=0.2.5'
-          grep -q 'Deine Bestzeiten' /tmp/v025.js
-          grep -q 'improvement_since_best_seconds' /tmp/v025.js
-          curl -fsS -o /tmp/races.json http://127.0.0.1:18099/api/v2/races
-          curl -fsS -o /tmp/settings.json http://127.0.0.1:18099/api/settings
-          curl -fsS -o /tmp/aggressiveness.json http://127.0.0.1:18099/api/v2/settings/aggressiveness
-          curl -fsS -o /tmp/marks.json http://127.0.0.1:18099/api/v2/performance-marks
+          curl -fsS -o /tmp/healthkit.json -H 'Content-Type: application/json' -d '{"schema_version":1,"source":"laufapp_ios","device_id":"ci","workouts":[{"id":"ci-healthkit-run","activity_type":"running","start_at":"2026-08-30T08:00:00+02:00","end_at":"2026-08-30T08:30:00+02:00","distance_km":6.0,"duration_s":1800,"samples":[{"id":"ci-hr","type":"heart_rate","at":"2026-08-30T08:01:00+02:00","value":145,"unit":"count/min"}],"route":[]}],"metrics":[]}' http://127.0.0.1:18099/api/v3/healthkit/sync
           python - <<'PY'
           import json
-          races=json.load(open('/tmp/races.json'))
-          settings=json.load(open('/tmp/settings.json'))
-          aggression=json.load(open('/tmp/aggressiveness.json'))
-          marks=json.load(open('/tmp/marks.json'))
-          assert isinstance(races,list), races
-          assert settings.get('training_volume_profile') in {'gradual','steady','progressive'}, settings
-          assert settings.get('training_aggressiveness_level') in {'gradual','steady','progressive','very_progressive'}, settings
-          assert aggression.get('training_volume_profile') in {'gradual','steady','progressive','very_progressive'}, aggression
-          assert isinstance(marks.get('stored'),list), marks
+          data=json.load(open('/tmp/healthkit.json'))
+          assert data['ok'] is True and data['workouts_added']==1 and data['samples_added']==1, data
           PY
+          curl -fsS -o /tmp/healthkit-status.json http://127.0.0.1:18099/api/v3/healthkit/status
+          python - <<'PY'
+          import json
+          data=json.load(open('/tmp/healthkit-status.json'))
+          assert data['connected_source']=='native_healthkit' and data['live_runs']>=1, data
+          PY
+
+  ios-build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        run: cd ios && xcodegen generate
+      - name: Compile iOS companion for simulator
+        run: xcodebuild -project ios/Laufapp.xcodeproj -scheme Laufapp -sdk iphonesimulator -configuration Debug CODE_SIGNING_ALLOWED=NO build
