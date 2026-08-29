@@ -29,7 +29,10 @@ core.legacy.app.version = APP_VERSION
 core.training.VERSION = APP_VERSION
 
 app = previous.app
-install(core.training, health_import, import_jobs)
+# Performance predictions and the v0.1.x API use the original training module;
+# the v0.2 planner wraps it for plan generation. Patch the original module so
+# every existing caller sees the same performance-anchor behavior.
+install(core.legacy_training, health_import, import_jobs)
 
 
 @app.get("/api/v2/performance-marks")
@@ -39,7 +42,7 @@ def api_v2_performance_marks():
         stored = [dict(r) for r in c.execute(
             "SELECT * FROM performance_marks ORDER BY mark_date DESC,id DESC"
         ).fetchall()]
-        detected = detect_apple_health_best_efforts(c, core.training, 24)
+        detected = detect_apple_health_best_efforts(c, core.legacy_training, 24)
         return {
             "stored": stored,
             "detected": detected,
@@ -51,6 +54,6 @@ def api_v2_performance_marks():
 def api_v2_performance_marks_sync():
     """Explicitly refresh auto-generated marks from already imported runs."""
     with db_conn() as c:
-        count = sync_apple_health_best_marks(c, core.training, 24)
-        predictions = core.training.predict_all(c)
+        count = sync_apple_health_best_marks(c, core.legacy_training, 24)
+        predictions = core.legacy_training.predict_all(c)
         return {"ok": True, "detected": count, "predictions": predictions}
