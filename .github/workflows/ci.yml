@@ -34,6 +34,7 @@ jobs:
         run: |
           node --check laufapp/app/static/app.js
           node --check laufapp/app/static/assets/v020.js
+          node --check laufapp/app/static/assets/v020_science.js
       - name: Full regression suite
         run: pytest -q
       - name: 16-week marathon simulation
@@ -52,7 +53,8 @@ jobs:
             sleep 1
           done
           python - <<'PY'
-          import json
+          import json, yaml
           data=json.load(open('/tmp/laufapp-health.json'))
-          assert data == {'ok': True, 'version': '0.2.0'}, data
+          expected=yaml.safe_load(open('laufapp/config.yaml'))['version']
+          assert data == {'ok': True, 'version': expected}, data
           PY
