@@ -66,4 +66,6 @@ def test_github_repository_layout():
     workflow=(ROOT/'.github/workflows/ci.yml').read_text()
     for required in ['pytest -q','python -m compileall','node --check','docker build','v020_science.js']:
         assert required in workflow
+    assert 'group: laufapp-ci-${{ github.event.pull_request.number || github.run_id }}' in workflow
+    assert "cancel-in-progress: ${{ github.event_name == 'pull_request' }}" in workflow
     assert (ROOT/'requirements-dev.txt').is_file()
