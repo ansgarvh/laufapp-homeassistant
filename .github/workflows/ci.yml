@@ -36,6 +36,7 @@ jobs:
           node --check laufapp/app/static/assets/v020.js
           node --check laufapp/app/static/assets/v020_science.js
           node --check laufapp/app/static/assets/v023_aggressiveness.js
+          node --check laufapp/app/static/assets/v025.js
       - name: Full regression suite
         run: pytest -q
       - name: 16-week marathon simulation
@@ -61,29 +62,37 @@ jobs:
           PY
           curl -fsS -D /tmp/root.headers -o /tmp/root.html http://127.0.0.1:18099/
           grep -qi '^cache-control: no-store, max-age=0' /tmp/root.headers
-          grep -q 'assets/v020.js?v=0.2.3' /tmp/root.html
-          grep -q 'assets/v020_science.js?v=0.2.3' /tmp/root.html
-          grep -q 'assets/v023_aggressiveness.js?v=0.2.3' /tmp/root.html
-          curl -fsS -D /tmp/asset.headers -o /tmp/v020.js 'http://127.0.0.1:18099/assets/v020.js?v=0.2.3'
+          grep -q 'assets/v020.js?v=0.2.5' /tmp/root.html
+          grep -q 'assets/v020_science.js?v=0.2.5' /tmp/root.html
+          grep -q 'assets/v023_aggressiveness.js?v=0.2.5' /tmp/root.html
+          grep -q 'assets/v025.js?v=0.2.5' /tmp/root.html
+          grep -q 'assets/v025.css?v=0.2.5' /tmp/root.html
+          curl -fsS -D /tmp/asset.headers -o /tmp/v020.js 'http://127.0.0.1:18099/assets/v020.js?v=0.2.5'
           grep -qi '^cache-control: no-store, max-age=0' /tmp/asset.headers
           grep -q 'A-Rennen' /tmp/v020.js
           grep -q 'B-Rennen' /tmp/v020.js
           grep -q 'api/v2/races' /tmp/v020.js
-          curl -fsS -o /tmp/science.js 'http://127.0.0.1:18099/assets/v020_science.js?v=0.2.3'
+          curl -fsS -o /tmp/science.js 'http://127.0.0.1:18099/assets/v020_science.js?v=0.2.5'
           grep -q 'Planungsaggressivität' /tmp/science.js
-          curl -fsS -o /tmp/v023.js 'http://127.0.0.1:18099/assets/v023_aggressiveness.js?v=0.2.3'
+          curl -fsS -o /tmp/v023.js 'http://127.0.0.1:18099/assets/v023_aggressiveness.js?v=0.2.5'
           grep -q 'Sehr aggressiv' /tmp/v023.js
           grep -q 'very_progressive' /tmp/v023.js
+          curl -fsS -o /tmp/v025.js 'http://127.0.0.1:18099/assets/v025.js?v=0.2.5'
+          grep -q 'Deine Bestzeiten' /tmp/v025.js
+          grep -q 'improvement_since_best_seconds' /tmp/v025.js
           curl -fsS -o /tmp/races.json http://127.0.0.1:18099/api/v2/races
           curl -fsS -o /tmp/settings.json http://127.0.0.1:18099/api/settings
           curl -fsS -o /tmp/aggressiveness.json http://127.0.0.1:18099/api/v2/settings/aggressiveness
+          curl -fsS -o /tmp/marks.json http://127.0.0.1:18099/api/v2/performance-marks
           python - <<'PY'
           import json
           races=json.load(open('/tmp/races.json'))
           settings=json.load(open('/tmp/settings.json'))
           aggression=json.load(open('/tmp/aggressiveness.json'))
+          marks=json.load(open('/tmp/marks.json'))
           assert isinstance(races,list), races
           assert settings.get('training_volume_profile') in {'gradual','steady','progressive'}, settings
           assert settings.get('training_aggressiveness_level') in {'gradual','steady','progressive','very_progressive'}, settings
           assert aggression.get('training_volume_profile') in {'gradual','steady','progressive','very_progressive'}, aggression
+          assert isinstance(marks.get('stored'),list), marks
           PY
