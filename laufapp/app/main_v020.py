@@ -21,9 +21,20 @@ from training_adaptation_v020 import (
     run_response_metrics,
     save_workout_feedback,
 )
+from training_guardrails_v020 import enforce_generated_long_run_share
 
 APP_VERSION = "0.2.0"
 db_module.APP_VERSION = APP_VERSION
+
+# A mid-week explicit refresh keeps past/completed/manual rows. Re-apply the
+# existing long-run-share guardrail only to the newly generated planned Long Run
+# so protected user history stays authoritative without allowing the remainder
+# of the week to violate the configured cap.
+_science_generate_week = training.generate_week
+def _guarded_generate_week(c, ws=None, force=False):
+    result = _science_generate_week(c, ws, force)
+    return enforce_generated_long_run_share(c, result)
+training.generate_week = _guarded_generate_week
 
 # Preserve the mature v0.1.9 API/security layer and replace only planner globals.
 for _name in ("current_race","generate_week","week_summary","dashboard","automatic_max_weekly_km","refresh_plan"):
