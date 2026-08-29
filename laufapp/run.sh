@@ -3,4 +3,4 @@ set -euo pipefail
 umask 077
 mkdir -p /data /data/tmp
 cd /app
-exec uvicorn main_v020:app --host 0.0.0.0 --port 8099 --proxy-headers --forwarded-allow-ips='*'
+exec uvicorn main_v021:app --host 0.0.0.0 --port 8099 --proxy-headers --forwarded-allow-ips='*'
