@@ -1,6 +1,23 @@
-# Laufapp v0.2.0
+# Laufapp v0.2.2
 
 Private, mobile-first Lauf-PWA für Home Assistant OS auf dem Beelink Mini S12. Die App verbindet eine lokale Trainings-/Prognoseengine mit Apple-Health-Daten und einem optionalen OpenAI-Coach. Sie ist für genau einen Nutzer ausgelegt.
+
+## Highlights von v0.2.2
+
+- **Fehlende v0.2-Einstellungen behoben:** Der `/assets`-Mount zeigte bislang auf `static/` statt auf `static/assets/`. Dadurch wurden u. a. `v020.js` und `v020_science.js` im realen Add-on mit HTTP 404 beantwortet. Die Basis-UI funktionierte weiter, aber A-/B-Rennen und Planungsaggressivität waren unsichtbar.
+- **A-/B-Rennen werden jetzt real ausgeliefert:** Die bereits vorhandene Mehrfach-Rennverwaltung unter **Einstellungen → Rennen** wird nun aus dem korrekten statischen Verzeichnis geladen.
+- **Planungsaggressivität wird jetzt real ausgeliefert:** Unter **Einstellungen** stehen **Konservativ**, **Moderat** und **Aggressiv** zur Verfügung. Die Auswahl steuert die vorhandenen Profile `gradual`, `steady` und `progressive`; harte Wochen-/Longrun-Limits, Recovery, Deload, Taper und Qualitätsbudget bleiben bindend.
+- **Cache-Invalidierung für Home Assistant/iOS:** relevante Frontend-Assets tragen `?v=0.2.2`, der PWA-Cache heißt `laufapp-v0.2.2`, und Frontend-Antworten werden mit `Cache-Control: no-store, max-age=0` ausgeliefert.
+- **Runtime-Regression erweitert:** Der Docker-Smoke-Test prüft jetzt nicht nur `/api/health`, sondern lädt im gestarteten Container die echten v0.2-JavaScript-Assets und prüft A-/B-Rennlogik, Aggressivitätsoptionen sowie `/api/v2/races` und `/api/settings`.
+- **Keine Datenbankschemamigration:** bestehende Läufe, Apple-Health-Daten, Rennen, Schuhe, Coach-Daten und Einstellungen bleiben erhalten.
+
+## Highlights von v0.2.1
+
+- **Wochenziel konsistent:** Ein nachgelagerter Longrun-Anteils-Guardrail kann eine vollständig automatisch erzeugte Woche nicht mehr unbemerkt deutlich unter das zuvor berechnete Wochenziel drücken.
+- **Longrun-Anteil als Guardrail statt pauschaler Abschneider:** Die normale 45-%-Orientierung bleibt konservativer Belastungsrahmen. Ein bewusst strengerer Nutzerwert bleibt bindend; reale Longrun-Historie und `max_long_run_km` werden berücksichtigt.
+- **Kilometer-Rückverteilung:** Wenn ein tatsächlich bindender Guardrail in einer gemischten/geschützten Woche Kilometer entfernt, können diese soweit sinnvoll ausschließlich auf flexible zukünftige Easy Runs verteilt werden.
+- **Planbasis klarer:** `Aktueller Umfang` wurde zu **Trainingsbasis**, `Geplant` zu **Wochenziel** präzisiert.
+- **Drei Progressionsstufen:** Konservativ / Moderat / Aggressiv basieren auf der bereits vorhandenen deterministischen Blockprogression statt auf einem pauschalen Kilometeraufschlag.
 
 ## Highlights von v0.2.0
 
@@ -89,7 +106,7 @@ Zeiträume sind rollierende Kalendermonate bis heute; die angebrochene aktuelle 
 
 - **Heute:** nächstes A-Rennen als Planfokus, Zielzeit, Prognose, Zielbewertung, nächste Einheit, Recovery-Signale und offene Coach-Vorschläge.
 - **Woche:** 3–7 geplante Trainingseinheiten gemäß Einstellungen, Status, Wochenkilometer, RPE + Pace, Verschieben auch in angrenzende Wochen, Planqualitäts- und Longrun-Guardrails; B-Rennen ersetzen in ihrer Rennwoche den Longrun.
-- **Trainingssteuerung:** konfigurierbare Lauftage, Qualitätseinheiten, automatische/manuelle Wochenobergrenze, maximale Longrun-Distanz sowie bestehende Guardrails.
+- **Trainingssteuerung:** konfigurierbare Lauftage, Qualitätseinheiten, Planungsaggressivität, automatische/manuelle Wochenobergrenze, maximale Longrun-Distanz sowie bestehende Guardrails.
 - **Rennen:** mehrere A-/B-Rennen, eigene Zielzeit, Laufapp-Zeitempfehlung und automatische A-Renn-Fokusübergabe.
 - **Fortschritt:** Prognosen für 5 km, 10 km, Halbmarathon und Marathon mit Unsicherheitsbereich, Wochenkilometer und Leistungsprofil; absolvierte Läufe können nachträglich einem Schuh zugeordnet werden.
 - **Apple Health:** exakt 24 Kalendermonate; Läufe, Ruhepuls, HRV, Schlaf, Gewicht und VO₂max; wiederholte Exporte werden dedupliziert.
@@ -123,7 +140,7 @@ Standardmodelle: `gpt-5.6-terra` für den Coach und `gpt-5.6-luna` für Screensh
 
 ## Teststatus
 
-Die automatisierte GitHub-CI prüft Python-Compilecheck, JavaScript-Syntax, vollständige Pytest-Regression, die eigenständige 16-Wochen-Marathonsimulation, **neun reproduzierbar randomisierte Läuferprofile**, den Home-Assistant-Docker-Build und einen Docker-Runtime-Smoke-Test gegen `/api/health`. Der final validierte v0.2-Branch besteht **78/78 Pytests** plus dem vollständigen 16-Wochen-Simulator und dem separaten 9-Profil-Simulator. Zusätzlich enthält die Testsuite synthetische End-to-End-, Migrations-, Ingress-, Health-Import-, Trainingsplan- und UI-Regressionsprüfungen.
+Die automatisierte GitHub-CI prüft Python-Compilecheck, JavaScript-Syntax, vollständige Pytest-Regression, die eigenständige 16-Wochen-Marathonsimulation, **neun reproduzierbar randomisierte Läuferprofile**, den Home-Assistant-Docker-Build und einen Docker-Runtime-Smoke-Test. Für v0.2.2 prüft der Runtime-Test zusätzlich die tatsächliche HTTP-Auslieferung der verschachtelten v0.2-Assets sowie die Renn- und Einstellungs-APIs. Der aktuelle v0.2.2-Stand besteht **82/82 Pytests** plus dem vollständigen 16-Wochen-Simulator und dem separaten 9-Profil-Simulator.
 
 Statisch/isoliert getestet; Home-Assistant-Integration muss lokal auf dem Beelink verifiziert werden. Reale iPhone-/Nabu-Casa-Interaktionen sind nicht Bestandteil der isolierten CI.
 
@@ -134,5 +151,5 @@ cd laufapp/app
 export LAUFAPP_DATA_DIR=/tmp/laufapp-data
 export LAUFAPP_TRANSFER_DIR=/tmp/laufapp-transfer
 export LAUFAPP_TRUSTED_INGRESS_ONLY=0
-uvicorn main_v020:app --host 127.0.0.1 --port 8099
+uvicorn main_v022:app --host 127.0.0.1 --port 8099
 ```

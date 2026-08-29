@@ -58,3 +58,26 @@ jobs:
           expected=yaml.safe_load(open('laufapp/config.yaml'))['version']
           assert data == {'ok': True, 'version': expected}, data
           PY
+          curl -fsS -D /tmp/root.headers -o /tmp/root.html http://127.0.0.1:18099/
+          grep -qi '^cache-control: no-store, max-age=0' /tmp/root.headers
+          grep -q 'assets/v020.js?v=0.2.2' /tmp/root.html
+          grep -q 'assets/v020_science.js?v=0.2.2' /tmp/root.html
+          curl -fsS -D /tmp/asset.headers -o /tmp/v020.js 'http://127.0.0.1:18099/assets/v020.js?v=0.2.2'
+          grep -qi '^cache-control: no-store, max-age=0' /tmp/asset.headers
+          grep -q 'A-Rennen' /tmp/v020.js
+          grep -q 'B-Rennen' /tmp/v020.js
+          grep -q 'api/v2/races' /tmp/v020.js
+          curl -fsS -o /tmp/science.js 'http://127.0.0.1:18099/assets/v020_science.js?v=0.2.2'
+          grep -q 'Planungsaggressivität' /tmp/science.js
+          grep -q 'Konservativ' /tmp/science.js
+          grep -q 'Moderat' /tmp/science.js
+          grep -q 'Aggressiv' /tmp/science.js
+          curl -fsS -o /tmp/races.json http://127.0.0.1:18099/api/v2/races
+          curl -fsS -o /tmp/settings.json http://127.0.0.1:18099/api/settings
+          python - <<'PY'
+          import json
+          races=json.load(open('/tmp/races.json'))
+          settings=json.load(open('/tmp/settings.json'))
+          assert isinstance(races,list), races
+          assert settings.get('training_volume_profile') in {'gradual','steady','progressive'}, settings
+          PY
