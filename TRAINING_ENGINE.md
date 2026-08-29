@@ -18,6 +18,10 @@ Die robuste etablierte Wochenlast aus v0.1.7 bleibt erhalten: abgeschlossenes Tr
 
 Ein normaler vier-Tage-Marathonblock orientiert sich an Easy / Quality / Easy / Longrun. Bei mehr Lauftagen wird zusätzliches Volumen überwiegend locker verteilt. Die konfigurierten Qualitätseinheiten sind ein Belastungsbudget; ein intensiver Marathon-Longrun zählt selbst als Qualitätsreiz und reduziert deshalb die eigenständige Qualitätseinheit.
 
+### Qualitätsbudget bei intensiven Longruns
+
+Die zusätzliche randomisierte Regression hat eine Lücke aufgedeckt: Bei `Qualitätseinheiten = 1` konnte neben einem MP-/Fast-Finish-Longrun noch eine substantielle Schwellen-Einheit entstehen. Damit enthielt die Woche faktisch zwei harte Reize, obwohl nur einer konfiguriert war. Der Fix behandelt den intensiven Longrun nun als den einzigen bedeutenden Qualitätsreiz. Der andere strukturierte Tag wird dann lediglich als kurze Ökonomie-/Aktivierungseinheit dosiert und darf nicht als zweite harte Schwellen-/VO₂max-Einheit auftreten. Dieser Fall ist dauerhaft in der randomisierten CI-Regression abgesichert.
+
 ## Intensitätsverteilung
 
 Für Marathontraining wird eine pyramidenförmige Verteilung angestrebt. Die Engine bewertet nicht eine einzelne Woche als starre Prozentvorgabe, sondern projiziert die Belastung rollierend über vier Wochen. `TrainingLoad` enthält dafür geschätzte Minuten niedrig/moderat/hoch sowie Zeit oberhalb LT1, um LT2, oberhalb LT2, Marathonpace-Minuten, Dauer, Distanz, Longrun-Dauer, Höhenmeter (wenn vorhanden), RPE und einen internen Belastungsscore.
@@ -113,16 +117,24 @@ Die exakte Rotation „Intervalle → Pyramide → Tempodauerlauf“ ist nicht a
 
 ## Validierung v0.2.0
 
-Die CI führt neben Compile- und JavaScript-Syntaxchecks die vollständige Pytest-Regression, einen eigenständigen 16-Wochen-Marathonsimulator, Docker-Build und Docker-Runtime-Smoke-Test aus. Der Simulator erzeugt einen kompletten 16-Wochen-Zyklus, markiert jede Woche synthetisch als absolviert und lässt die nächste Woche aus der entstandenen Historie neu planen. Geprüft werden unter anderem:
+Die CI führt neben Compile- und JavaScript-Syntaxchecks die vollständige Pytest-Regression, einen eigenständigen 16-Wochen-Marathonsimulator, **neun reproduzierbar randomisierte Läuferprofile**, Docker-Build und Docker-Runtime-Smoke-Test aus. Der feste Simulator erzeugt einen kompletten 16-Wochen-Zyklus, markiert jede Woche synthetisch als absolviert und lässt die nächste Woche aus der entstandenen Historie neu planen.
+
+Die neun Randomprofile verwenden feste Seeds und decken ungefähr **25–100 km etablierte Wochenlast**, **3–7 Lauftage**, **1–3 Qualitätseinheiten**, unterschiedliche 10-km-Leistungsstände, automatische/manuelle Wochenlimits, bewusst niedrige Nutzerlimits, unterschiedliche Longrun-Grenzen, ambitionierte Zielzeiten, Detraining und B-Rennen ab. Geprüft werden unter anderem:
 
 - Foundation/Build/Recovery/Specific/Taper/Race
+- exakte Anzahl und konfliktfreie Datierung der Einheiten
 - echte Workoutvariation bei konsistentem physiologischem Ziel
+- Qualitätsbudget inklusive intensiver Longruns
 - begrenzte VO₂max-Rolle im Build und Rückgang vor dem Rennen
-- mehrere Deloads
-- MP-Longrun-Verteilung
-- Distanz-vs.-Intensitätsregel
+- mehrere Deloads und MP-Longrun-Verteilung
+- Longrun-Distanz-vs.-Intensitätsregel
+- harte Nutzergrenzen für Wochenumfang und Longrun
+- Current-Estimated-Pace-Cap bei ambitionierter Zielzeit
 - rollierend überwiegend niedrige Intensität
-- voller 42,195-km-Wettkampf statt versehentlicher Taper-Skalierung
-- robuste Datenbankintegrität
+- B-Renn-Ersatzlogik
+- voller 42,195-km-A-Wettkampf am realen Renntag
+- robuste SQLite-Datenbankintegrität
+
+Der final geprüfte Branch besteht **78/78 Pytests**, dem separaten 16-Wochen-Simulator, allen neun Randomprofilen, Home-Assistant-Docker-Build und Docker-Runtime-Smoke-Test.
 
 Nicht simuliert werden reale Home-Assistant-/Ingress-/Nabu-Casa-/iPhone-Interaktionen. Daher gilt weiterhin: **Statisch/isoliert getestet; Home-Assistant-Integration muss lokal auf dem Beelink verifiziert werden.**
