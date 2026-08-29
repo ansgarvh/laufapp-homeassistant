@@ -4,7 +4,13 @@ import json
 from datetime import date
 
 import training as base
+import training_v020 as orchestration
 from db import get_setting
+from training_runtime_refinements_v020 import apply_runtime_refinements
+
+# main_v020 imports this module only after training_v020 is loaded. Apply the
+# calendar/fixed-distance refinements before main_v020 captures generate_week.
+apply_runtime_refinements(orchestration)
 
 
 def enforce_generated_long_run_share(c, workouts: list[dict]) -> list[dict]:
