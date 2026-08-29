@@ -3,36 +3,41 @@ from __future__ import annotations
 from datetime import date
 
 import training as base
-from training_models_v020 import TrainingPhase
+import training_planner_v020 as planner
+from training_models_v020 import PhysiologicalTarget, TrainingPhase
 
 _APPLIED = False
 
 
 def apply_runtime_refinements(orchestration) -> None:
-    """Patch only orchestration concerns that cannot live in the physiology layer.
-
-    The scientific planner decides the session. The orchestration layer decides
-    calendar placement and protects fixed event/session distances from generic
-    residual-week scaling.
-    """
+    """Patch orchestration/calendar concerns without replacing the planner core."""
     global _APPLIED
     if _APPLIED:
         return
 
     original_week_sessions = orchestration._week_sessions
     original_weekly_target = orchestration.weekly_target
+    original_quality_focus = planner._quality_focus
 
     def refined_weekly_target(c, race, ws, readiness):
         total, phase = original_weekly_target(c, race, ws, readiness)
         if phase is TrainingPhase.RACE:
-            # Race distance is not optional training volume. Keep a small amount
-            # of pre-race running/frequency while never scaling the marathon down
-            # merely because the taper target is lower than 42.195 km.
+            # Race distance is not optional training volume. Keep only a small
+            # amount of pre-race running/frequency around it, but never scale the
+            # entered marathon itself down to an artificial taper target.
             established = base.established_volume(c, ws)
             baseline = float(established.get("km") or base._prefs(c, float(race["distance_km"]))["baseline"])
             non_race = max(9.0, min(16.0, baseline * 0.20))
             total = max(float(total), float(race["distance_km"]) + non_race)
         return round(float(total), 1), phase
+
+    def refined_quality_focus(phase, weeks_to_race, hard_long):
+        # VO2max has a deliberate but limited place in marathon training. Place
+        # it in Build roughly every four weeks, then let it recede in Specific.
+        # If the Long Run is already hard/specific, downgrade the other hard day.
+        if phase is TrainingPhase.BUILD and weeks_to_race in {10, 14}:
+            return PhysiologicalTarget.ECONOMY if hard_long else PhysiologicalTarget.VO2MAX
+        return original_quality_focus(phase, weeks_to_race, hard_long)
 
     def refined_week_sessions(c, race, ws, phase, total):
         dates, sessions, zones, equivalent, b_meta, decision = original_week_sessions(c, race, ws, phase, total)
@@ -61,6 +66,7 @@ def apply_runtime_refinements(orchestration) -> None:
 
         return dates, sessions, zones, equivalent, b_meta, decision
 
+    planner._quality_focus = refined_quality_focus
     orchestration.weekly_target = refined_weekly_target
     orchestration._week_sessions = refined_week_sessions
     _APPLIED = True
