@@ -56,8 +56,12 @@ def validate_plan(rows):
     specific=[r for r in rows if r['phase']=='specific'];mp=[r for r in specific if r['mp_km']>0];assert 2<=len(mp)<=4
     previous=None
     for r in rows:
-        if previous and r['mp_km']>previous['mp_km'] and r['mp_km']>0:assert r['longrun_km']<=previous['longrun_km']+1.2
-        if previous and r['longrun_km']>=previous['longrun_km']+1.5:assert r['mp_km']<=max(.1,previous['mp_km'])
+        # The load-vector rule controls TRAINING Long Runs. Race day itself is not
+        # constrained to be within 1.2 km of the final taper Long Run.
+        if previous and r['phase']!='race' and r['mp_km']>previous['mp_km'] and r['mp_km']>0:
+            assert r['longrun_km']<=previous['longrun_km']+1.2,(previous,r)
+        if previous and r['phase']!='race' and r['longrun_km']>=previous['longrun_km']+1.5:
+            assert r['mp_km']<=max(.1,previous['mp_km']),(previous,r)
         previous=r
     stable=[r for r in rows[3:13] if r['low_pct']>0];assert stable and sum(r['low_pct'] for r in stable)/len(stable)>=70
     pre_taper=max(r['planned_km'] for r in rows[:-3]);assert rows[-2]['planned_km']<pre_taper*.8 and rows[-1]['planned_km']<pre_taper
