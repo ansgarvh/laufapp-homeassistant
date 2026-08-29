@@ -4,6 +4,7 @@
   const screen=document.getElementById('screen');
   const modalRoot=document.getElementById('modal-root');
   const toastNode=document.getElementById('toast');
+  let settingsEnhanceBusy=false;
   const targetLabels={
     aerobic_base:'Aerobe Basis',threshold:'Schwelle / LT2',vo2max:'VO₂max',economy:'Laufökonomie',
     marathon_specific:'Marathon-spezifisch',aerobic_progression:'Aerobe Progression',hills:'Hügel / Kraftausdauer',
@@ -15,6 +16,11 @@
     progression:'Progressionslauf',marathon_pace:'Marathonpace-Blöcke',long_easy:'Easy Longrun',
     long_progression:'Progressiver Longrun',long_mp_blocks:'Longrun mit MP-Blöcken',long_fast_finish:'Longrun Fast Finish',
     long_deload:'Reduzierter Longrun',race_prep:'Race Prep',race:'Wettkampf',easy:'Easy Run'
+  };
+  const aggressivenessCopy={
+    gradual:'Langsamere Progression von Wochenumfang und Belastung. Sicherheits- und Recovery-Regeln bleiben unverändert.',
+    steady:'Ausgewogene Progression als Standard. Umfang und spezifische Belastung steigen kontrolliert innerhalb des Trainingsblocks.',
+    progressive:'Schnellere Progression bei guter Verträglichkeit. Harte Wochen-/Longrun-Limits, Recovery und Qualitätsbudget bleiben weiterhin bindend.'
   };
   const esc=s=>String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
   const apiPath=path=>new URL(path.replace(/^\//,''),new URL('.',document.baseURI)).toString();
@@ -31,6 +37,48 @@
     modalRoot.querySelector('.close')?.addEventListener('click',closeModal);modalRoot.querySelector('.modal-backdrop')?.addEventListener('click',e=>{if(e.target===e.currentTarget)closeModal()});onReady?.(modalRoot.querySelector('.modal'));
   }
   const paceText=s=>{const n=Math.round(Number(s)||0);return n?`${Math.floor(n/60)}:${String(n%60).padStart(2,'0')} min/km`:'–'};
+
+  function enhancePlanBasisLabels(){
+    if(screen?.querySelector('.page-head h1')?.textContent?.trim()!=='Wochenübersicht')return;
+    const card=screen.querySelector('.plan-basis');if(!card)return;
+    card.querySelectorAll('.quality-metrics > div').forEach(metric=>{
+      const label=metric.querySelector('span');if(!label)return;
+      const text=label.textContent.trim();
+      if(text==='Aktueller Umfang'){
+        label.textContent='Trainingsbasis';
+        metric.title='Robust ermittelter etablierter Wochenumfang aus abgeschlossenen Trainingswochen.';
+      }else if(text==='Geplant'){
+        label.textContent='Wochenziel';
+        metric.title='Von der Engine für diese Trainingsphase angestrebtes Wochenbudget vor Schutz- und Sicherheitsanpassungen.';
+      }
+    });
+  }
+
+  async function enhancePlanningSettings(){
+    if(settingsEnhanceBusy||screen?.querySelector('.page-head h1')?.textContent?.trim()!=='Einstellungen')return;
+    const form=screen.querySelector('#settings-form');
+    if(!form||form.querySelector('[data-v020-aggressiveness]'))return;
+    settingsEnhanceBusy=true;
+    try{
+      const settings=await api('api/settings');
+      const current=['gradual','steady','progressive'].includes(settings.training_volume_profile)?settings.training_volume_profile:'steady';
+      const field=document.createElement('label');field.className='field';field.dataset.v020Aggressiveness='1';
+      field.innerHTML=`<span>Planungsaggressivität</span><select class="select" name="v020_aggressiveness" aria-label="Planungsaggressivität"><option value="gradual" ${current==='gradual'?'selected':''}>Konservativ</option><option value="steady" ${current==='steady'?'selected':''}>Moderat</option><option value="progressive" ${current==='progressive'?'selected':''}>Aggressiv</option></select><small class="v020-aggressiveness-note">${esc(aggressivenessCopy[current])}</small>`;
+      const maxField=[...form.querySelectorAll('.field')].find(x=>x.querySelector(':scope > span')?.textContent?.trim()==='Max. Wochenumfang');
+      if(maxField)maxField.after(field);else form.querySelector('button[type="submit"]')?.before(field);
+      const select=field.querySelector('select'),note=field.querySelector('.v020-aggressiveness-note');
+      select?.addEventListener('change',async()=>{
+        const value=select.value;note.textContent=aggressivenessCopy[value]||aggressivenessCopy.steady;select.disabled=true;
+        try{
+          await api('api/settings',{method:'PATCH',body:{training_volume_profile:value}});
+          toast('Planungsaggressivität gespeichert. Plan neu berechnen, um sie anzuwenden.');
+          setTimeout(()=>document.querySelector('#bottom-nav [data-view="settings"]')?.click(),80);
+        }catch(err){toast(err.message,true);select.value=current;note.textContent=aggressivenessCopy[current]}
+        finally{select.disabled=false}
+      });
+    }catch(err){toast(`Planungsaggressivität konnte nicht geladen werden: ${err.message}`,true)}
+    finally{settingsEnhanceBusy=false}
+  }
 
   function tidHtml(tid){
     if(!tid||!Number(tid.low_pct)&&!Number(tid.moderate_pct)&&!Number(tid.high_pct))return '';
@@ -95,6 +143,6 @@
     const menu=e.target.closest?.('[data-workout-menu]');if(menu){const id=Number(menu.dataset.workoutMenu);setTimeout(()=>enhanceWorkoutModal(id),90)}
   },true);
 
-  const observer=new MutationObserver(()=>{enhanceWorkoutCards();enhanceReadiness()});
-  if(screen){observer.observe(screen,{childList:true,subtree:true});enhanceWorkoutCards();enhanceReadiness()}
+  const observer=new MutationObserver(()=>{enhanceWorkoutCards();enhanceReadiness();enhancePlanningSettings();enhancePlanBasisLabels()});
+  if(screen){observer.observe(screen,{childList:true,subtree:true});enhanceWorkoutCards();enhanceReadiness();enhancePlanningSettings();enhancePlanBasisLabels()}
 })();
