@@ -9,6 +9,12 @@ on:
 permissions:
   contents: read
 
+# A new commit on the same pull request makes the older full CI result obsolete.
+# Keep main-push and manual runs independent so final/release validation is never skipped.
+concurrency:
+  group: laufapp-ci-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   test:
     runs-on: ubuntu-latest
