@@ -155,5 +155,5 @@ def test_v020_synthetic_end_to_end(setup_client):
     shoe_row=next(s for s in client.get('/api/shoes').json() if s['id']==shoe)
     assert shoe_row['run_count']==1 and shoe_row['total_km']>=float(workout['distance_km'])-.05
 
-    # API health exposes the release version through the actual v0.2 entrypoint.
-    assert client.get('/api/health').json()=={'ok':True,'version':'0.2.0'}
+    # API health exposes the release version through the active compatibility stack.
+    assert client.get('/api/health').json()=={'ok':True,'version':main_v020.APP_VERSION}
