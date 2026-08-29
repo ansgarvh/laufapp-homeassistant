@@ -2,7 +2,7 @@ from __future__ import annotations
 import math
 from datetime import datetime
 from typing import Any
-RUN_SAMPLE_TYPES={"heart_rate","running_speed","running_power","stride_length","vertical_oscillation","ground_contact_time","cadence"}
+RUN_SAMPLE_TYPES={"distance","heart_rate","running_speed","running_power","stride_length","vertical_oscillation","ground_contact_time","cadence"}
 HEALTH_METRIC_TYPES={"resting_hr","hrv_sdnn","body_mass","vo2max","sleep_hours"}
 MAX_WORKOUTS_PER_REQUEST=4
 MAX_SAMPLES_PER_WORKOUT=120000
