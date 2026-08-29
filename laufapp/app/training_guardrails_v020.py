@@ -13,12 +13,89 @@ from training_runtime_refinements_v020 import apply_runtime_refinements
 apply_runtime_refinements(orchestration)
 
 
+_LOAD_KEYS = (
+    "distance_km", "duration_min", "low_min", "moderate_min", "high_min",
+    "above_lt1_min", "around_lt2_min", "above_lt2_min", "marathon_pace_min",
+    "elevation_m", "long_run_duration_min", "score",
+)
+
+
+def _scale_load(details: dict, factor: float) -> dict:
+    load = details.get("load") or {}
+    for key in _LOAD_KEYS:
+        if key in load:
+            load[key] = round(float(load.get(key) or 0) * factor, 2)
+    details["load"] = load
+    return details
+
+
+def _redistribute_trimmed_longrun_km(c, workouts: list[dict], freed_km: float, target_total: float) -> float:
+    """Move guardrail-trimmed distance only into flexible future Easy runs.
+
+    A Long-Run share guardrail must not silently turn a 63 km weekly target into
+    a 58 km week. When the rest of the week is still engine-owned, the removed
+    distance is redistributed as low-intensity volume. Protected/manual/past
+    workouts are never changed. If no flexible Easy run remains, the shortfall is
+    left in place rather than mutating user-owned training.
+    """
+    if freed_km <= 0.05:
+        return 0.0
+    today = date.today().isoformat()
+    current_total = sum(float(w.get("distance_km") or 0) for w in workouts) - freed_km
+    refill = min(freed_km, max(0.0, float(target_total) - current_total))
+    if refill <= 0.05:
+        return 0.0
+
+    flexible = [
+        w for w in workouts
+        if w.get("workout_type") == "easy"
+        and w.get("status") == "planned"
+        and not int(w.get("manual_override") or 0)
+        and str(w.get("modified_by") or "engine") == "engine"
+        and str(w.get("scheduled_date") or "") >= today
+    ]
+    if not flexible:
+        return 0.0
+
+    weights = [max(1.0, float(w.get("distance_km") or 0)) for w in flexible]
+    weight_sum = sum(weights)
+    distributed = 0.0
+    for index, (workout, weight) in enumerate(zip(flexible, weights)):
+        share = refill - distributed if index == len(flexible) - 1 else refill * weight / weight_sum
+        if share <= 0:
+            continue
+        row = c.execute("SELECT distance_km,details_json FROM workouts WHERE id=?", (int(workout["id"]),)).fetchone()
+        if not row:
+            continue
+        old_km = float(row["distance_km"] or 0)
+        new_km = round(old_km + share, 1)
+        actual_add = max(0.0, new_km - old_km)
+        if actual_add <= 0:
+            continue
+        try:
+            details = json.loads(row["details_json"] or "{}")
+        except Exception:
+            details = {}
+        details = _scale_load(details, new_km / max(old_km, 0.001))
+        details["guardrail_redistributed_km"] = round(actual_add, 2)
+        c.execute(
+            "UPDATE workouts SET distance_km=?,details_json=? WHERE id=?",
+            (new_km, json.dumps(details, ensure_ascii=False), int(workout["id"])),
+        )
+        distributed += actual_add
+    return round(distributed, 2)
+
+
 def enforce_generated_long_run_share(c, workouts: list[dict]) -> list[dict]:
     """Keep Long-Run share as a contextual guardrail, not a universal ceiling.
 
-    The default 45% share is an orientation signal. A marathon Long Run supported
-    by recent completed Long-Run history may exceed that orientation. A deliberately
-    tighter user setting below the normal 45% default remains authoritative.
+    The default 45% share is an orientation signal. A fully engine-generated
+    future week is therefore not post-hoc shortened merely to hit exactly 45%;
+    the LongRunPlanner already controls the normal share and recent tolerated
+    history may justify a higher value. A deliberately tighter user setting below
+    the normal 45% default remains authoritative. In mixed/protected weeks the
+    guardrail may still trim the generated Long Run, but removed kilometres are
+    shifted to flexible Easy runs where possible so the weekly target is not lost.
     """
     if any(w.get("workout_type") == "race" for w in workouts):
         return workouts
@@ -69,12 +146,14 @@ def enforce_generated_long_run_share(c, workouts: list[dict]) -> list[dict]:
     )
     history_supported = bool(details.get("history_supported_share")) or inferred_history_supported
 
-    # A history-supported peak Long Run is allowed to exceed the normal 45%
-    # orientation. If the user deliberately configured a stricter share (<45%),
-    # keep enforcing it. max_long_run_km remains the hard distance ceiling.
-    if history_supported and cap >= 0.445:
+    # The default 45% value is an orientation for a clean, fully generated week,
+    # not a second hard cap after the planner has already assembled the week.
+    # A stricter (<45%) legacy/user value remains binding. Protected mixed weeks
+    # still receive the contextual check because their composition can change
+    # independently of the newly generated Long Run.
+    if cap >= 0.445 and not protected_context:
         return workouts
-    if history_supported and not protected_context:
+    if history_supported and cap >= 0.445:
         return workouts
 
     if long_km / total <= cap + 0.005:
@@ -90,27 +169,23 @@ def enforce_generated_long_run_share(c, workouts: list[dict]) -> list[dict]:
         return workouts
 
     factor = new_km / max(long_km, 0.001)
-    load = details.get("load") or {}
-    for key in (
-        "distance_km", "duration_min", "low_min", "moderate_min", "high_min",
-        "above_lt1_min", "around_lt2_min", "above_lt2_min", "marathon_pace_min",
-        "elevation_m", "long_run_duration_min", "score",
-    ):
-        if key in load:
-            load[key] = round(float(load.get(key) or 0) * factor, 2)
-    details["load"] = load
+    details = _scale_load(details, factor)
     if "mp_km" in details:
         details["mp_km"] = round(float(details.get("mp_km") or 0) * factor, 2)
     previous_why = str(details.get("why") or "").strip()
     guardrail_text = (
-        "Die Distanz wurde zusätzlich durch deine eingestellte Longrun-Anteilsgrenze "
-        "begrenzt, weil bereits absolvierte, vergangene oder geschützte Einheiten dieser Woche erhalten bleiben."
+        "Die Longrun-Distanz wurde durch die wirksame Anteilsgrenze begrenzt. "
+        "Soweit möglich wird das entfernte Wochenbudget ausschließlich auf lockere, "
+        "noch automatisch geplante Einheiten verteilt."
     )
     details["why"] = f"{previous_why} {guardrail_text}".strip()
     c.execute(
         "UPDATE workouts SET distance_km=?,details_json=? WHERE id=?",
         (new_km, json.dumps(details, ensure_ascii=False), int(long_row["id"])),
     )
+
+    target_total = float(details.get("week_target_km") or total)
+    _redistribute_trimmed_longrun_km(c, workouts, long_km - new_km, min(total, target_total))
     return [
         dict(r) | {"details": _details(r["details_json"]), "pace_text": _pace_text(r)}
         for r in c.execute(
