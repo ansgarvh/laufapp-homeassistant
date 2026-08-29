@@ -7,13 +7,13 @@ from db import get_setting
 
 
 def enforce_generated_long_run_share(c, workouts: list[dict]) -> list[dict]:
-    """Apply the legacy share cap only when the current week is partly protected.
+    """Keep Long-Run share as a contextual guardrail, not a universal ceiling.
 
-    The share setting is a guardrail, not a universal generator ceiling. A future
-    clean marathon week may deliberately contain a history-supported peak Long Run
-    above the usual share. During a mid-week refresh, however, past/completed/manual
-    rows are preserved; in that situation the newly generated Long Run is still
-    capped so the retained week cannot become accidentally disproportionate.
+    The default 45% share is an orientation signal. A marathon Long Run that is
+    explicitly supported by recent completed Long-Run history may exceed that
+    orientation, including in the current week. A deliberately tighter user
+    setting below the normal 45% default remains authoritative for compatibility,
+    especially during a mid-week refresh that preserves completed/manual rows.
     """
     if any(w.get("workout_type") == "race" for w in workouts):
         return workouts
@@ -49,7 +49,14 @@ def enforce_generated_long_run_share(c, workouts: list[dict]) -> list[dict]:
         )
         for w in workouts
     )
-    if details.get("history_supported_share") and not protected_context:
+
+    # A history-supported peak Long Run is allowed to exceed the normal 45%
+    # orientation. If the user has deliberately configured a stricter share
+    # (<45%), keep enforcing it. max_long_run_km remains a separate hard ceiling.
+    history_supported = bool(details.get("history_supported_share"))
+    if history_supported and cap >= 0.445:
+        return workouts
+    if history_supported and not protected_context:
         return workouts
 
     long_km = float(long_row.get("distance_km") or 0)
