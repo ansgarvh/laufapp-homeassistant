@@ -74,7 +74,7 @@ Zeiträume sind rollierende Kalendermonate bis heute; die angebrochene aktuelle 
 
 ## Highlights von v0.1.4
 
-- **Große Apple-Health-Uploads über Ingress:** Home Assistant streamt Uploads direkt zur Laufapp. Dadurch können auch große Exportdateien zuverlässig über Ingress hochgeladen werden, ohne die bestehende Ingress-only-Zugriffskontrolle zu ändern.
+- **Große Apple-Health-Uploads über Ingress:** Home Assistant streamt große Apple-Health-Uploads direkt zur Laufapp. Dadurch können auch große Exportdateien zuverlässig über Ingress hochgeladen werden, ohne die bestehende Ingress-only-Zugriffskontrolle zu ändern.
 
 ### Weiterhin enthalten aus v0.1.3
 
