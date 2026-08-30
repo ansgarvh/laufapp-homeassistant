@@ -112,17 +112,12 @@ jobs:
           cat > /tmp/hae-relay.json <<'JSON'
           {"data":{"workouts":[{"id":"ci-nabu-relay-run","name":"Running","start":"2026-08-30 10:00:00 +0200","end":"2026-08-30 10:30:00 +0200","duration":1800,"distance":{"qty":5.0,"units":"km"},"heartRateData":[{"date":"2026-08-30 10:00:01 +0200","Avg":146,"units":"bpm"}],"runningPower":[{"date":"2026-08-30 10:00:01 +0200","qty":301,"units":"W"}],"route":[{"latitude":50.775,"longitude":6.083,"altitude":180,"timestamp":"2026-08-30 10:00:00 +0200"}]}],"metrics":[]}}
           JSON
+          test "$(curl -sS -o /tmp/relay-bearer.json -w '%{http_code}' -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' --data-binary @/tmp/hae-relay.json http://127.0.0.1:18100/home-assistant-relay)" = "401"
           docker run --rm --network ha-relay-test \
             -e TOKEN="$TOKEN" \
             -v /tmp/hae-relay.json:/tmp/hae-relay.json:ro \
             --entrypoint python laufapp-ci:${{ github.sha }} -c \
-            "import json,os,urllib.error,urllib.request; data=open('/tmp/hae-relay.json','rb').read(); url='http://laufapp-smoke:8100/home-assistant-relay'; bad=urllib.request.Request(url,data=data,headers={'Content-Type':'application/json','Authorization':'Bearer '+os.environ['TOKEN']},method='POST');
-try: urllib.request.urlopen(bad,timeout=5); raise AssertionError('Bearer-only relay request must fail')
-except urllib.error.HTTPError as e: assert e.code==401
-
-def send():
- q=urllib.request.Request(url,data=data,headers={'Content-Type':'application/json','X-Laufapp-Token':os.environ['TOKEN']},method='POST'); return json.loads(urllib.request.urlopen(q,timeout=5).read())
-first=send(); second=send(); assert first['ok'] and first['runs_added']==1 and first['samples_added']==2 and first['gps_points_added']==1, first; assert second['ok'] and second['runs_existing']==1 and second['samples_added']==0 and second['gps_points_added']==0, second; assert 'predictions' not in first and 'version' not in first"
+            "import json,os,urllib.request; data=open('/tmp/hae-relay.json','rb').read(); url='http://laufapp-smoke:8100/home-assistant-relay'; headers={'Content-Type':'application/json','X-Laufapp-Token':os.environ['TOKEN']}; first=json.loads(urllib.request.urlopen(urllib.request.Request(url,data=data,headers=headers,method='POST'),timeout=5).read()); second=json.loads(urllib.request.urlopen(urllib.request.Request(url,data=data,headers=headers,method='POST'),timeout=5).read()); assert first['ok'] and first['runs_added']==1 and first['samples_added']==2 and first['gps_points_added']==1, first; assert second['ok'] and second['runs_existing']==1 and second['samples_added']==0 and second['gps_points_added']==0, second; assert 'predictions' not in first and 'version' not in first"
           docker logs laufapp-smoke 2>&1 | grep -q 'LAUFAPP_HAE_RELAY_OK transport=nabu_casa'
 
           docker rm -f laufapp-smoke >/dev/null
