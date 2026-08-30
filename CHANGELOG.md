@@ -1,5 +1,18 @@
 # Laufapp Changelog
 
+## v0.2.7 – 2026-08-30
+
+- Home-Assistant-Ingress-Vertrauensgrenze gehärtet: Uvicorn vertraut keine beliebigen Proxy-Header mehr; in Produktion wird ausschließlich die reale TCP-Quelle des Home-Assistant-Ingress-Proxys `172.30.32.2` akzeptiert, Loopback nur für `/api/health`. Gefälschte `X-Forwarded-For`-/Ingress-Header werden in einem Docker-Negativtest explizit abgewehrt.
+- Health-Auto-Export-Gateway arbeitet fail closed und startet Port 8100 nur mit einem starken, mindestens 48 Zeichen langen zufälligen Token. Authentifizierung erfolgt vor dem Body-Lesen; JSON-Content-Type, 16-MiB-Streaminglimit, 120-Sekunden-Timeout, Mengenlimits und begrenzte Parallelität schützen gegen Request-/Memory-/Slow-Request-DoS.
+- Gateway-Angriffsfläche minimiert: OpenAPI/Swagger/ReDoc deaktiviert, Server-Header deaktiviert, `no-store`/`nosniff`/`no-referrer`, write-only Antwort ohne Prognosen oder persönliche Read-Daten.
+- Workout-ID-Kollisionsschutz und Cross-Source-Deduplizierung verhindern widersprüchliche Wiederverwendung sowie Doppelwerte beim Übergang vom klassischen Apple-Health-Import zu Health Auto Export.
+- Klassischer Apple-Health-ZIP/XML-Pfad gehärtet: ZIP-Bomb-/Dateianzahl-/GPX-Größen-/Punktlimits, GPS-Plausibilisierung und `defusedxml` gegen XML-Entity-Expansion/externe XML-Referenzen.
+- Dependency-Audit identifizierte bekannte Sicherheitslücken in der zuvor verwendeten Starlette-Version 0.50.0. Runtime-Stack auf FastAPI 0.141.1 / Starlette 1.6.0 aktualisiert; direkte Runtime-Abhängigkeiten gepinnt und `pip-audit` als Release-Gate ergänzt.
+- Bandit-Security-Scan mit review-bewusstem Gate ergänzt; neue Medium/High-Findings blockieren die CI. GitHub Actions sind auf konkrete Commit-SHAs gepinnt und besitzen nur `contents: read`.
+- Dynamische Frontend-Renderpfade auf Stored/Reflected XSS geprüft; im geprüften Pfad keine offene XSS-Lücke gefunden.
+- Keine Datenbankschemamigration und keine fachliche Änderung der Trainingslogik.
+- Statisch/isoliert und in Linux/Docker getestet; reale Home-Assistant-/Supervisor-/VPN-/Health-Auto-Export-iPhone-Integration muss lokal verifiziert werden.
+
 ## v0.2.6 – 2026-08-30
 
 - Release-Linie funktional wieder auf den vollständig getesteten v0.2.5-Stand gesetzt; die zwischenzeitlich entwickelte native v0.3.0-iOS-/HealthKit-App und deren macOS-CI-Pfad wurden entfernt.
@@ -141,7 +154,7 @@
 - Explizites Datenbankschema (`PRAGMA user_version`) und versionierte Migrationen eingeführt.
 - Bestehende v0.1.0–v0.1.2-Datenbanken werden additiv auf Schema 2 migriert; Läufe, Health-Daten, Schuhe, Wettkämpfe, Trainingsplan, Bestleistungen und Coach-Daten bleiben erhalten.
 - Vor Schema-Migration wird eine integrity-geprüfte SQLite-Sicherung unter `/data/backups/` erzeugt.
-- Bei Migrationsfehler wird der Vorzustand aus dem Backup wiederhergestellt und der Start abgebrochen; Downgrades auf ein älteres Schema werden blockiert.
+- Bei Migrationsfehler wird der Vorzustand aus dem Backup wiederhergestellt und der App-Start bricht ab; Downgrades auf ein älteres Schema werden blockiert.
 - Einmalige, integrity-geprüfte Datenbrücke über `/share/laufapp-transfer/` für den Wechsel von der bisherigen Local App zur späteren GitHub-Repository-App ergänzt. Vorhandene Repository-Daten werden niemals überschrieben.
 
 ### Apple Health

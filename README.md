@@ -1,106 +1,73 @@
-# Laufapp v0.2.6
+# Laufapp v0.2.7
 
-Private, mobile-first Lauf-PWA für Home Assistant OS. Laufapp verbindet eine lokale Trainings-/Prognoseengine mit Apple-Health-Daten und einem optionalen OpenAI-Coach. Die Anwendung ist für einen einzelnen privaten Nutzer ausgelegt.
+Private, mobile-first Lauf-PWA für Home Assistant OS. Laufapp verbindet eine lokale Trainings-/Prognoseengine mit Apple-Health-Daten, Health Auto Export und einem optionalen OpenAI-Coach. Die Anwendung ist für einen einzelnen privaten Nutzer ausgelegt.
 
-## Neu in v0.2.6
+## Neu in v0.2.7 – Security-Härtung
 
-v0.2.6 baut wieder auf dem vollständig getesteten **v0.2.5-Stand** auf. Die zwischenzeitlich entwickelte native iOS-/HealthKit-App aus v0.3.0 gehört nicht mehr zur Release-Linie. Stattdessen übernimmt **Health Auto Export** die HealthKit-Brücke vom iPhone zur Laufapp.
+v0.2.7 baut funktional auf v0.2.6 auf und ändert keine Trainingslogik und kein Datenbankschema. Vor der ersten realen Health-Auto-Export-Freigabe wurde die komplette Netzwerk-, Import-, Dependency-, Browser- und Build-Angriffsfläche erneut geprüft und gehärtet.
 
-Health Auto Export kann per REST API JSON Export Version 2 senden. Laufapp verarbeitet dabei:
+Wesentliche Änderungen:
 
-- Laufworkouts mit stabiler Workout-ID, Start/Ende, Dauer, Distanz, Kalorien, Höhenmetern und mittlerer Herzfrequenz
-- zeitaufgelöste Herzfrequenz
-- Running Speed
-- Running Power
-- Schrittlänge
-- vertikale Oszillation
-- Bodenkontaktzeit
-- dokumentierte Workout-Kadenz (`stepCadence`)
-- GPS-Route mit Zeitstempel und Höhe
-- Ruhepuls
-- HRV/SDNN
-- Gewicht
-- VO₂max
-- Schlafdauer
+- **Home-Assistant-Ingress gegen Spoofing gehärtet:** Port 8099 vertraut nicht mehr auf `X-Forwarded-For`, `X-Hass-Source` oder `X-Ingress-Path`. In Produktion wird ausschließlich die reale TCP-Quelle des Home-Assistant-Ingress-Proxys (`172.30.32.2`) akzeptiert; Loopback ist nur für `/api/health` erlaubt. Uvicorn läuft ohne Proxy-Header-Vertrauen.
+- **Health-Auto-Export-Gateway fail closed:** Port 8100 wird gar nicht gestartet, solange kein ausreichend starker Sync-Token konfiguriert ist.
+- **Starker separater Sync-Token:** mindestens 48 zufällige Zeichen, keine Leerzeichen, timing-resistenter Vergleich. Empfohlen: `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
+- **Request-DoS-Schutz:** Authentifizierung vor Body-Lesen, JSON-only, 16-MiB-Streaminglimit, 120-Sekunden-Body-Timeout, Mengenlimits und begrenzte Gateway-Parallelität.
+- **Write-only Gateway:** die Sync-Antwort enthält keine Trainingsprognosen, persönlichen Read-Daten oder Versionsinformationen.
+- **Replay-/Kollisionsschutz:** idempotenter Reimport, Cross-Source-Deduplizierung und Ablehnung derselben Workout-ID bei widersprüchlichem Start, Distanz oder Dauer.
+- **Apple-Health-ZIP/XML gehärtet:** ZIP-Bomb-Limits, Größen-/Dateianzahlgrenzen, GPX-Punkt- und Koordinatenlimits sowie `defusedxml` gegen Entity Expansion/externe XML-Referenzen.
+- **Abhängigkeiten aktualisiert und gepinnt:** FastAPI/Starlette wurden wegen im Audit gefundener bekannter Starlette-Sicherheitslücken auf gepatchte Versionen aktualisiert; alle direkten Runtime-Abhängigkeiten sind reproduzierbar gepinnt.
+- **Security-CI:** `pip-audit`, Bandit-Gate, gepinnte GitHub-Actions, hostile-ingress-Docker-Test und die bestehende vollständige Regression sind Release-Voraussetzung.
 
-Reimporte sind idempotent. Nach einem Laufimport werden geplante Einheiten gematcht, Apple-Health-Bestzeiten aktualisiert und Prognosen neu berechnet.
+Ausführliche Details und verbleibende Risiken stehen in `SECURITY.md`.
 
-## Empfohlene Health-Auto-Export-Konfiguration
+## Health Auto Export
 
-Für Laufdaten:
+Laufapp verarbeitet Health Auto Export per REST API, JSON Export Version 2. Unterstützt werden Laufworkout, Start/Ende, Dauer, Distanz, Kalorien, Höhenmeter, mittlere und zeitaufgelöste Herzfrequenz, Running Speed, Running Power, Schrittlänge, vertikale Oszillation, Bodenkontaktzeit, Kadenz, GPS-Route/Höhe sowie Ruhepuls, HRV/SDNN, Gewicht, VO₂max und Schlafdauer.
 
-- Automation Type: **REST API**
-- Export Format: **JSON**
-- Export Version: **Version 2**
-- Date Range: **Since Last Sync / Seit letzter Synchronisierung**
-- Data Type: **Workouts**
-- Workout: **Running**
-- Include Route Data: **On**
-- Include Workout Metrics: **On**
-- Workout Metrics Time Grouping: **Seconds**
-- Header: `Authorization: Bearer <dein Token>`
+Empfohlene Lauf-Automation in Health Auto Export:
 
-Für allgemeine Gesundheitsdaten empfiehlt sich eine zweite Automation mit **Health Metrics** und nur den benötigten Metriken: Resting Heart Rate, Heart Rate Variability, Weight/Body Mass, VO₂ Max und Sleep Analysis.
+- Automation: REST API
+- Format: JSON, Export Version 2
+- Zeitraum: Since Last Sync / Seit letzter Synchronisierung
+- Daten: Workouts → Running
+- Route Data: On
+- Workout Metrics: On
+- Workout Metrics Time Grouping: Seconds
+- Header: `Authorization: Bearer <dein zufälliger Sync-Token>`
 
-Health Auto Export weist selbst darauf hin, dass iOS Hintergrundausführungen nicht zu einem garantierten Zeitpunkt startet und Health-Daten bei gesperrtem iPhone nicht zugänglich sind. Der Sync ist daher automatisch, aber nicht zwingend unmittelbar nach dem Stoppen eines Laufs.
+Für Ruhepuls, HRV, Gewicht, VO₂max und Schlaf empfiehlt sich eine zweite, weniger häufige Health-Metrics-Automation.
 
-## Netzwerk und Sicherheit
+## Netzwerk
 
-Die eigentliche Laufapp bleibt weiterhin **Home-Assistant-Ingress-only**.
+Port **8099** bleibt ausschließlich Home Assistant Ingress. Er darf nicht als normaler Host-Port veröffentlicht werden.
 
-- Port **8099**: Laufapp UI/API über Home Assistant Ingress; direkte Veröffentlichung standardmäßig deaktiviert.
-- Port **8100**: separater minimaler Health-Auto-Export-Gateway mit ausschließlich `/health` und `POST /health-auto-export`; standardmäßig ebenfalls nicht veröffentlicht.
-- Der Health-Auto-Export-Endpunkt benötigt zwingend ein Secret aus der Home-Assistant-App-Option `health_auto_export_token`.
-- Unterstützt werden `Authorization: Bearer <Token>` und `X-Laufapp-Token: <Token>`.
-- Das Token wird timing-resistent mit `hmac.compare_digest` verglichen.
-- Für Payload-Größe, Workout-Anzahl, Zeitreihen und GPS-Punkte gelten Schutzlimits.
+Port **8100** ist der minimale Health-Auto-Export-Gateway und ist in `config.yaml` ebenfalls standardmäßig **nicht** veröffentlicht. Er startet nur mit einem starken Token. Für Nutzung außerhalb des Heimnetzes muss er über ein **verschlüsseltes VPN (z. B. Tailscale/WireGuard) oder einen korrekt abgesicherten HTTPS-Reverse-Proxy** erreichbar gemacht werden. Eine unverschlüsselte Internet-Portweiterleitung ist ausdrücklich nicht vorgesehen.
 
-**Port 8100 niemals unverschlüsselt ins Internet weiterleiten.** Für Zugriff außerhalb des Heimnetzes ist VPN/Tailscale oder ein korrekt abgesicherter HTTPS-Reverse-Proxy vorgesehen. Für den ersten lokalen Test kann Port 8100 bewusst auf einen Host-Port gemappt und im Heimnetz verwendet werden.
+## Bestehende Funktionen
 
-## Bestehende Funktionen aus v0.2.5
+- Heute: Planfokus, Zielzeit, Prognose, nächste Einheit, Recovery-Signale und Coach-Vorschläge
+- Wochenübersicht: 3–7 konfigurierbare Lauftage, Verschieben/Tauschen, Status, Wochenkilometer und Planbegründungen
+- Rennen: mehrere A-/B-Rennen mit eigener Zielzeit
+- Trainingssteuerung: wissenschaftlich orientierte Periodisierung, Workout-Variation, Deload/Taper, Longrun-/Qualitätsbudget und Planungsaggressivität
+- Fortschritt: Prognosen für 5 km, 10 km, Halbmarathon und Marathon sowie sichtbare Bestzeiten
+- Apple Health: manueller ZIP/XML-Import der letzten 24 Monate als Historien-/Fallbackpfad
+- detaillierte Laufdaten: HR, Speed, Power, Schrittlänge, vertikale Oszillation, Bodenkontaktzeit, Kadenz, GPS/Höhe soweit vorhanden
+- Schuhe: Stammdaten und Kilometerbilanz
+- AI Coach: optionaler Chat, Screenshot-Auswertung und ausschließlich bestätigungspflichtige Planänderungen
 
-- **Heute:** Planfokus, Zielzeit, Prognose, nächste Einheit, Recovery-Signale und Coach-Vorschläge
-- **Woche:** 3–7 konfigurierbare Lauftage, Verschieben/Tauschen, Status, Wochenkilometer und Planbegründungen
-- **Rennen:** mehrere A-/B-Rennen mit eigener Zielzeit
-- **Trainingssteuerung:** wissenschaftlich orientierte Marathonperiodisierung, Workout-Variation, Deload/Taper, Longrun-/Qualitätsbudget und Planungsaggressivität
-- **Fortschritt:** Prognosen für 5 km, 10 km, Halbmarathon und Marathon
-- **Bestzeiten:** manuelle Leistungsanker plus automatische Erkennung aus Apple-Health-Läufen
-- **Apple Health:** manueller ZIP/XML-Import der letzten 24 Monate bleibt vollständig als Fallback erhalten
-- **Detaillierte Laufdaten:** HR, Speed, Power, Schrittlänge, vertikale Oszillation, Bodenkontaktzeit, Kadenz soweit vorhanden, GPS/Höhe
-- **Schuhe:** Stammdaten und Kilometerbilanz
-- **AI Coach:** optionaler Chat, Screenshot-Auswertung und bestätigungspflichtige Planänderungen
+## Persistenz
 
-## Persistenz und Migration
+Benutzerdaten liegen im persistenten Home-Assistant-`/data`-Bereich. v0.2.7 benötigt **keine Datenbankschemamigration**; bestehende Läufe, Health-Daten, Bestzeiten, Schuhe, Rennen, Trainingsplan, Einstellungen und Coach-Daten bleiben erhalten.
 
-Benutzerdaten liegen in Home Assistants persistentem `/data`-Bereich, der Programmcode im Container-Image. Ein normales Update derselben Repository-App ersetzt daher nicht die SQLite-Datenbank.
+## OpenAI
 
-v0.2.6 benötigt **keine neue Datenbankschemaversion**. Bestehende v0.2.5-Läufe, Health-Daten, Bestzeiten, Schuhe, Rennen, Trainingsplan, Einstellungen und Coach-Daten bleiben erhalten.
+Der OpenAI-API-Key bleibt serverseitig in der Home-Assistant-App-Konfiguration und wird nicht an das Browser-Frontend ausgeliefert. Laufapp funktioniert für Plan, Prognosen, Health-Import, Wochenübersicht, Läufe, Schuhe und Rennen vollständig ohne OpenAI-Key.
 
-Der manuelle Apple-Health-ZIP/XML-Import bleibt bewusst bestehen. Health Auto Export ist die kontinuierliche Schnittstelle für neue Daten; der Export-Import bleibt Backup-, Historien- und Diagnosepfad.
+## Release-Prüfungen
 
-## OpenAI API
+Vor Merge laufen Python-Compilecheck, JavaScript-Syntaxcheck, vollständige Pytest-Regression, 16-Wochen-Marathonsimulation, neun randomisierte Läuferprofile, `pip-audit`, Bandit-Gate, Docker-Build sowie Docker-E2E für Health Auto Export und eine absichtlich feindliche Ingress-Spoofing-Simulation.
 
-Der OpenAI API-Key bleibt serverseitig in der Home-Assistant-App-Konfiguration (`/data/options.json`) und wird nicht an das Browser-Frontend ausgeliefert. Die Laufapp funktioniert für Plan, Prognosen, Health-Import, Wochenübersicht, Läufe, Schuhe und Rennen auch ohne OpenAI-Key.
-
-## Tests
-
-Die CI prüft vor einem Release:
-
-- Python-Compilecheck
-- JavaScript-Syntax
-- vollständige Pytest-Regression
-- 16-Wochen-Marathonsimulation
-- neun reproduzierbar randomisierte Läuferprofile
-- Docker-Build
-- Docker-Runtime-Smoke-Test
-- Start von Laufapp und separatem Health-Auto-Export-Gateway
-- abgelehnten unauthentifizierten Sync
-- authentifizierten synthetischen JSON-v2-Workoutimport
-- Herzfrequenz-, Power- und GPS-Übernahme
-- Health-Metrik-Übernahme
-- wiederholte Zustellung ohne Duplikate
-
-Statisch/isoliert und in Linux/Docker getestet; reale Health-Auto-Export-/Home-Assistant-/iPhone-Übertragung muss lokal verifiziert werden.
+Statisch/isoliert und in Linux/Docker getestet. Die echte Home-Assistant-/Supervisor-/Nabu-Casa-/VPN-/Health-Auto-Export-iPhone-Integration muss nach Installation auf dem Beelink lokal verifiziert werden.
 
 ## Lokale Entwicklung
 
@@ -109,14 +76,8 @@ cd laufapp/app
 export LAUFAPP_DATA_DIR=/tmp/laufapp-data
 export LAUFAPP_TRANSFER_DIR=/tmp/laufapp-transfer
 export LAUFAPP_TRUSTED_INGRESS_ONLY=0
-export LAUFAPP_HEALTH_AUTO_EXPORT_TOKEN=dev-secret
-uvicorn main_v026:app --host 127.0.0.1 --port 8099
+export LAUFAPP_HEALTH_AUTO_EXPORT_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
+uvicorn main_v027:app --host 127.0.0.1 --port 8099 --no-proxy-headers
 ```
 
-Optional parallel für den dedizierten Sync-Gateway:
-
-```bash
-uvicorn health_auto_export_gateway:app --host 127.0.0.1 --port 8100
-```
-
-Weitere Details stehen in `RELEASE_NOTES_v0.2.6.md`, `TRAINING_ENGINE.md`, `MIGRATIONS.md` und `SECURITY.md`.
+Weitere Details: `SECURITY.md`, `RELEASE_NOTES_v0.2.7.md`, `TRAINING_ENGINE.md`, `MIGRATIONS.md`.
