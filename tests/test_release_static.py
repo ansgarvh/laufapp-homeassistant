@@ -4,10 +4,10 @@ ROOT=Path(__file__).resolve().parents[1]
 
 def test_versions_and_assets():
     cfg=yaml.safe_load((ROOT/'laufapp/config.yaml').read_text())
-    assert cfg['version']=='0.2.8'
-    assert 'APP_VERSION = "0.2.8"' in (ROOT/'laufapp/app/main_v028.py').read_text()
-    assert 'ARG BUILD_VERSION=0.2.8' in (ROOT/'laufapp/Dockerfile').read_text()
-    assert 'main_v028:app' in (ROOT/'laufapp/run.sh').read_text()
+    assert cfg['version']=='0.2.9'
+    assert 'APP_VERSION = "0.2.9"' in (ROOT/'laufapp/app/main_v029.py').read_text()
+    assert 'ARG BUILD_VERSION=0.2.9' in (ROOT/'laufapp/Dockerfile').read_text()
+    assert 'main_v029:app' in (ROOT/'laufapp/run.sh').read_text()
     static=ROOT/'laufapp/app/static'
     for name in ['index.html','styles.css','bugfix.css','app.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','assets/bugfix.css','assets/v020.js','assets/v020.css','assets/v020_science.js','assets/v020_science.css','assets/v023_aggressiveness.js','assets/v025.js','assets/v025.css']:assert (static/name).exists()
     m=json.loads((static/'manifest.webmanifest').read_text());assert m['display']=='standalone'
@@ -51,13 +51,16 @@ def test_ha_app_config_and_health_auto_export_gateway():
     subprocess.run(['bash','-n',str(ROOT/'laufapp/run.sh')],check=True)
     gateway=(ROOT/'laufapp/app/health_auto_export_gateway.py').read_text()
     assert '@app.post("/health-auto-export")' in gateway
-    assert 'from main_v028 import APP_VERSION' in gateway
+    assert 'from main_v029 import APP_VERSION' in gateway
     assert 'openapi_url=None' in gateway and 'Cache-Control' in gateway
     hae=(ROOT/'laufapp/app/health_auto_export_v027.py').read_text()
     assert 'MIN_TOKEN_LENGTH = 48' in hae and 'previous.authorized' in hae
     assert 'Workout-ID kollidiert' in hae
     runtime=(ROOT/'laufapp/app/main_v027.py').read_text()
-    assert 'host != "172.30.32.2"' in runtime
+    assert 'HOME_ASSISTANT_INTERNAL_NETWORK = ipaddress.ip_network("172.30.32.0/23")' in runtime
+    assert 'HOME_ASSISTANT_INGRESS_PROXY = ipaddress.ip_address("172.30.32.2")' in runtime
+    assert 'x-remote-user-id' in runtime and 'x-ingress-path' in runtime
+    assert 'LAUFAPP_INGRESS_BLOCKED' in runtime
     assert 'request.stream()' in runtime
     assert 'Content-Type application/json erforderlich' in runtime
     assert '"predictions"' not in runtime.split('return {"ok": True, **result}',1)[0][-500:]
@@ -102,7 +105,7 @@ def test_github_repository_layout_and_security_audit():
     assert repo['name']=='Laufapp Home Assistant Repository'
     assert repo['url']=='https://github.com/ansgarvh/laufapp-homeassistant'
     workflow=(ROOT/'.github/workflows/ci.yml').read_text()
-    for required in ['pytest -q','python -m compileall','node --check','docker build','v023_aggressiveness.js','v025.js','health-auto-export','pip-audit','X-Forwarded-For']:
+    for required in ['pytest -q','python -m compileall','node --check','docker build','v023_aggressiveness.js','v025.js','health-auto-export','pip-audit','X-Forwarded-For','172.30.32.0/23','X-Remote-User-Id']:
         assert required in workflow
     assert 'ios-build' not in workflow
     assert 'pip-audit==2.10.1' in (ROOT/'requirements-dev.txt').read_text()
