@@ -1,5 +1,17 @@
 # Laufapp Changelog
 
+## v0.2.11 – 2026-08-30
+
+- Reale HAE-Großpayload-Grenze behoben: detaillierte Sekunden-Workouts scheiterten im v0.2.10-Automationspfad an Home Assistants `Template output exceeded maximum size of 262144 characters`.
+- Neue Custom Integration `custom_components/laufapp_hae_relay` registriert einen direkten POST-only Home-Assistant-Webhook und leitet den Roh-JSON-Body ohne Jinja/`rest_command` an den internen Laufapp-Relay weiter.
+- Für den Produktionspfad wird die bereits real erreichbare Nabu-Casa-Remote-UI-URL `https://<id>.ui.nabu.casa/api/webhook/<secret-id>` genutzt; der dedizierte `hooks.nabu.casa`-Cloudhook hatte den echten großen HAE-Request in der Zielinstallation mit HTTP 413 abgewiesen.
+- Der Custom Relay akzeptiert nur JSON, begrenzt auf 16 MiB, besitzt das feste interne Ziel `c87ed7df-laufapp:8100`, ist POST-only, ergänzt den separaten starken internen Token und loggt weder Payload noch Secrets.
+- Ports 8099 und 8100 bleiben unveröffentlicht; es wird keine neue Host- oder Router-Portfreigabe benötigt.
+- Die alte Automation und der `rest_command` bleiben nur als Legacy-Kleinpayload-Diagnose; `local_only: false` wurde dort zugleich für die externe Remote-UI-Nutzung korrigiert.
+- Keine Datenbankschemamigration und keine Änderung an Trainingslogik, Prognosen, Bestzeiten, Apple-Health-Historienimport, HAE-Parser/Deduplizierung oder Ingress-Sicherheitslogik.
+- Neue Tests prüfen >262144-Byte-Forwarding, 16-MiB-Grenze, Content-Type, Secret-Validierung, POST-only-Registrierung und Duplicate-ID-Fail-Closed; die Custom Integration wird mitkompiliert und von Bandit gescannt.
+- Statisch/isoliert und in Linux/Docker getestet; die reale End-to-End-Integration des neuen Custom Components mit Home Assistant OS, Nabu Casa Remote UI und Health Auto Export auf dem iPhone muss nach Installation auf dem Zielsystem verifiziert werden. Die vorhandenen realen Tests haben Remote UI → Home Assistant sowie Home Assistant → Laufapp bereits getrennt bestätigt.
+
 ## v0.2.10 – 2026-08-30
 
 - Kontinuierliche Health-Auto-Export-Synchronisation kann nun über **Nabu Casa Cloud Webhooks** erfolgen: iPhone → HTTPS-Cloudhook → Home Assistant → Supervisor-internes App-Netz → Laufapp. Für diesen Betriebsweg sind weder dauerhaftes VPN auf dem iPhone noch eine Router-Portfreigabe nötig.

@@ -28,5 +28,5 @@ jobs:
         run: pip-audit -r laufapp/requirements.txt
       - name: Python security scan
         run: |
-          bandit -r laufapp/app -ll -ii -f json -o /tmp/bandit.json || true
+          bandit -r laufapp/app custom_components/laufapp_hae_relay -ll -ii -f json -o /tmp/bandit.json || true
           python scripts/bandit_gate.py /tmp/bandit.json

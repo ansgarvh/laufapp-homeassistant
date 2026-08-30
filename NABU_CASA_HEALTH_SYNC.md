@@ -1,55 +1,109 @@
 # Nabu Casa Health Auto Export Relay
 
-Laufapp v0.2.10 supports a Home-Assistant-internal relay for Health Auto Export (HAE). The iPhone sends JSON to a Nabu Casa cloud webhook over HTTPS. Home Assistant receives that webhook and forwards the JSON only over the Supervisor-internal app network to Laufapp.
+Laufapp v0.2.11 uses a small Home Assistant custom integration to relay large Health Auto Export (HAE) JSON payloads without exposing Laufapp ports to the internet.
+
+## Why v0.2.11 changed the relay
+
+The v0.2.10 automation path used a Home Assistant webhook trigger followed by:
+
+```yaml
+payload: "{{ trigger.json | to_json }}"
+```
+
+Detailed running workouts with second-level metrics can exceed Home Assistant's 262144-character template-output limit. In a real installation this caused `Template output exceeded maximum size of 262144 characters` before `rest_command` could run. The dedicated `hooks.nabu.casa` cloudhook path also returned HTTP 413 for the same large HAE request in that installation.
+
+v0.2.11 therefore avoids both layers for detailed HAE payloads. It uses the normal Nabu Casa Remote UI HTTPS address and a custom Home Assistant webhook handler that reads the request body directly and forwards the raw JSON to Laufapp.
 
 ## Transport architecture
 
 ```text
 iPhone / Health Auto Export
     -> HTTPS
-Nabu Casa cloud webhook (secret webhook ID)
-    -> Home Assistant webhook automation
-Home Assistant REST command
-    -> http://c87ed7df-laufapp:8100/home-assistant-relay
+https://<remote-id>.ui.nabu.casa/api/webhook/<secret-webhook-id>
+    -> Home Assistant webhook API
+custom_components/laufapp_hae_relay
+    -> raw JSON, no Jinja/rest_command serialization
+http://c87ed7df-laufapp:8100/home-assistant-relay
+    -> strong X-Laufapp-Token
 Laufapp hardened HAE ingest
 ```
 
-The final HTTP hop is unencrypted because it never leaves the Home Assistant internal container network. Port 8100 remains `null` in Laufapp's app configuration and does not need a host/router port mapping for this mode.
+The final HTTP hop stays inside the Home Assistant Supervisor app network. Port 8100 remains unpublished (`null`) in Laufapp's app configuration. Do not forward ports 8099 or 8100 on the internet router.
 
 ## Security properties
 
-- The public endpoint is the Nabu Casa `https://hooks.nabu.casa/...` cloudhook, not Laufapp port 8100.
-- Treat the random webhook ID/cloudhook URL like a password. Never publish it.
-- Home Assistant's internal relay additionally authenticates to Laufapp with the existing strong `health_auto_export_token` via `X-Laufapp-Token`.
-- The relay endpoint reuses the hardened HAE parser: authentication before body buffering, JSON-only input, 16 MiB body limit, 120 s body timeout, point/workout limits and idempotent ingestion.
+- The public URL is Home Assistant's Nabu Casa Remote UI HTTPS endpoint plus a long random webhook ID. Treat the complete URL and webhook ID like a password.
+- The webhook accepts POST only.
+- The custom integration never embeds the Laufapp token in the public HAE request. Home Assistant adds the existing strong `health_auto_export_token` only on the internal Home Assistant -> Laufapp hop.
+- The internal destination is fixed in code to `http://c87ed7df-laufapp:8100/home-assistant-relay`; it is not user-configurable, which avoids turning the component into an arbitrary HTTP proxy.
+- The custom relay accepts `application/json` only and enforces a 16 MiB body limit before forwarding.
+- Laufapp applies its existing authentication, JSON, body-size, timeout, workout/point limits and idempotent import checks again on the internal endpoint.
+- Request bodies, webhook IDs and tokens are not written to normal relay logs.
 - The Laufapp UI remains Home Assistant Ingress-only on port 8099.
-- Do not forward ports 8099 or 8100 on the internet router.
 
-## 1. Secret in Home Assistant
+## 1. Install the Home Assistant custom integration
 
-Copy the same strong token configured in the Laufapp app options into Home Assistant's `secrets.yaml`:
+Copy this repository folder:
+
+```text
+custom_components/laufapp_hae_relay/
+```
+
+into Home Assistant so the final paths are:
+
+```text
+/config/custom_components/laufapp_hae_relay/__init__.py
+/config/custom_components/laufapp_hae_relay/manifest.json
+```
+
+The integration has no third-party Python requirements; it uses Home Assistant's built-in webhook and HTTP client APIs.
+
+## 2. Configure secrets
+
+Keep the existing strong Laufapp token in `secrets.yaml` and add a separate webhook ID secret. You may reuse the long random webhook ID from the temporary v0.2.10 automation after that automation has been removed.
 
 ```yaml
 laufapp_health_auto_export_token: "COPY_THE_EXISTING_LAUFAPP_TOKEN_HERE"
+laufapp_hae_webhook_id: "COPY_THE_EXISTING_OR_NEW_RANDOM_WEBHOOK_ID_HERE"
 ```
 
-Do not commit the real token to GitHub or paste it into automation YAML.
+The webhook ID must be 32-256 characters and contain only letters, digits, `_` or `-`. Do not publish either secret.
 
-## 2. Internal REST command
+## 3. Configure the relay integration
 
-Merge `home_assistant/rest_command_laufapp_nabu_casa.yaml.example` into `configuration.yaml`, then validate the Home Assistant configuration and restart Home Assistant.
+Merge `home_assistant/laufapp_hae_relay_configuration.yaml.example` into `/config/configuration.yaml`:
 
-The target `c87ed7df-laufapp` is the Supervisor-generated DNS hostname for this repository (`ansgarvh/laufapp-homeassistant`) and app slug (`laufapp`). It keeps the request inside the Home Assistant app network.
+```yaml
+laufapp_hae_relay:
+  webhook_id: !secret laufapp_hae_webhook_id
+  token: !secret laufapp_health_auto_export_token
+```
 
-## 3. Webhook automation
+Before restarting Home Assistant, remove or disable the old webhook automation that uses the same webhook ID. Home Assistant permits only one handler per webhook ID; the custom integration deliberately fails closed if the ID is already registered.
 
-Create a new Home Assistant automation and use the YAML from `home_assistant/automation_laufapp_nabu_casa.yaml.example`.
+The old `rest_command.laufapp_health_auto_export_relay` is no longer required for HAE. It may be removed after the direct relay works. The old automation/rest-command examples remain in the repository only as legacy small-payload diagnostics.
 
-Replace `REPLACE_WITH_A_NEW_RANDOM_WEBHOOK_ID` with a newly generated random webhook ID. Keep `local_only: true`: Home Assistant permits local-only webhooks from the local network and through Nabu Casa Cloud, while direct internet access to the Home Assistant webhook path stays disabled.
+Validate the Home Assistant configuration and restart Home Assistant.
 
-After saving, use Home Assistant Cloud's webhook management to obtain/enable the corresponding `https://hooks.nabu.casa/...` URL. That HTTPS URL is the URL entered in Health Auto Export.
+## 4. Health Auto Export URL
 
-## 4. Health Auto Export settings
+Use Home Assistant Cloud's Remote UI URL, not the dedicated `https://hooks.nabu.casa/...` cloudhook URL.
+
+If Remote UI is:
+
+```text
+https://example.ui.nabu.casa
+```
+
+and the secret webhook ID is `YOUR_WEBHOOK_ID`, the HAE target is:
+
+```text
+https://example.ui.nabu.casa/api/webhook/YOUR_WEBHOOK_ID
+```
+
+Do not add `X-Laufapp-Token` or the Laufapp token to Health Auto Export. The public credential is the secret webhook URL; the separate Laufapp token stays only inside Home Assistant.
+
+## 5. Health Auto Export settings
 
 Use REST API, JSON, Export Version 2.
 
@@ -62,28 +116,42 @@ For running workouts:
 - Batch requests: On
 - Date range: **Previous 7 Days / Letzte 7 Tage**
 
-For recovery/health metrics, use a second automation for resting heart rate, HRV, body mass, VO2max and sleep. `Previous 7 Days` is also recommended there.
+For recovery/health metrics, use a second HAE automation for resting heart rate, HRV, body mass, VO2max and sleep. `Previous 7 Days` is also recommended there.
 
-Do not add the Laufapp token to Health Auto Export when using the Nabu Casa relay. The public cloudhook secret protects the public endpoint; Home Assistant adds the separate Laufapp token only on the internal relay hop.
+## Why Previous 7 Days?
 
-## Why Previous 7 Days instead of Since Last Sync?
-
-A generic Home Assistant webhook schedules its automation after receiving the webhook. Its HTTP response to the sender is therefore not an end-to-end acknowledgement that the later REST command and Laufapp ingestion have completed.
-
-Using `Since Last Sync` could advance HAE's checkpoint even if the internal relay later failed. A seven-day overlapping window avoids this single-point delivery risk: recent data is sent again on the next sync, while Laufapp's existing workout/sample/GPS/health-metric deduplication makes repeated delivery idempotent.
-
-The Home Assistant automation is configured as `mode: queued` with a queue of 50 so HAE batch requests are serialized instead of racing each other.
-
-## 5. Disable the temporary LAN port mapping
-
-Only after one real cloudhook test has succeeded, remove the host mapping previously set for `8100/tcp` in the Laufapp network settings and restart the app. It should return to disabled/unpublished. The internal Home Assistant relay will continue to reach container port 8100 by Supervisor DNS.
+HAE and iOS background execution are not guaranteed to complete at every scheduled instant. An overlapping seven-day window resends recent data, while Laufapp's workout, sample, GPS and health-metric deduplication makes repeated delivery idempotent. This is safer than relying on a single irreversible `Since Last Sync` checkpoint.
 
 ## Verification
 
-A successful relay should produce an HTTP 200 from the internal REST command and a safe log line beginning with `LAUFAPP_HAE_RELAY_OK`. The normal Laufapp Health Auto Export status should then show the latest synchronization result.
+First verify the public webhook with a minimal request:
 
-If the internal relay fails, inspect the Home Assistant automation trace and Laufapp logs. Because the HAE automation uses a seven-day overlap, retrying does not create duplicate runs and normally catches the missed data on a later successful execution.
+```bash
+curl -i -X POST \
+  'https://YOUR-REMOTE-ID.ui.nabu.casa/api/webhook/YOUR_WEBHOOK_ID' \
+  -H 'Content-Type: application/json' \
+  --data '{"data":{"workouts":[],"metrics":[]}}'
+```
+
+A successful relay should produce a 2xx response and a safe Laufapp log line beginning with:
+
+```text
+LAUFAPP_HAE_RELAY_OK transport=nabu_casa
+```
+
+Then run a real HAE workout export with route and second-level workout metrics enabled. For an already imported historical run, `runs_existing=1` is expected and missing detail samples/GPS data should be added without creating a duplicate run.
+
+## Failure isolation
+
+- No Home Assistant webhook handling at all: verify the `.ui.nabu.casa/api/webhook/...` URL and webhook ID.
+- Home Assistant log says the webhook ID is already registered: remove/disable the old automation using that ID and restart.
+- HTTP 413 from the direct custom relay: the request exceeds the relay's 16 MiB limit and must be split by HAE.
+- HTTP 415: HAE is not sending `application/json`.
+- HTTP 502/504: Home Assistant received the request but could not reach the internal Laufapp relay; verify Laufapp is running and the strong token is configured.
+- Laufapp returns 4xx: inspect Laufapp logs for the hardened HAE validation reason; do not weaken the security checks to accept malformed payloads.
 
 ## Test boundary
 
-The repository CI can test the relay endpoint, authentication, idempotency, internal-network Docker path, version consistency and existing regressions. It cannot execute a real Nabu Casa cloudhook or an iPhone HAE background task. Those two integration edges must be verified on the actual Home Assistant OS/iPhone setup after installation.
+Repository CI can test the custom relay logic in isolation, including a payload larger than the 262144-character template ceiling, the 16 MiB limit, token/webhook validation, POST-only registration, the internal Laufapp endpoint, idempotent ingestion, Docker runtime, Home Assistant network simulation and existing regressions.
+
+A real Home Assistant OS + Nabu Casa Remote UI + iPhone Health Auto Export path cannot be executed inside repository CI and must be verified on the target installation. The v0.2.10 real-world tests already established that the `.ui.nabu.casa/api/webhook/...` route reaches Home Assistant and that Home Assistant can reach the internal Laufapp gateway; v0.2.11 removes the template serialization layer between those two confirmed edges.

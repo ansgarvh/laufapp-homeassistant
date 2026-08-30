@@ -1,7 +1,10 @@
-# Merge this block into Home Assistant configuration.yaml.
-# If a rest_command: section already exists, add only the child entry below.
-# The hostname is the Supervisor-internal DNS name of Laufapp when installed
-# from https://github.com/ansgarvh/laufapp-homeassistant.
+# LEGACY / SMALL-PAYLOAD EXAMPLE ONLY.
+# The rest_command itself can still call Laufapp, but a webhook automation that
+# serializes `trigger.json` into this command is limited by Home Assistant's
+# 262144-character template-output ceiling. v0.2.11 therefore uses the direct
+# custom webhook integration in custom_components/laufapp_hae_relay instead.
+#
+# This file remains for backwards compatibility and diagnostics.
 rest_command:
   laufapp_health_auto_export_relay:
     url: "http://c87ed7df-laufapp:8100/home-assistant-relay"

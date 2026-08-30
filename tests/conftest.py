@@ -12,8 +12,8 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv('LAUFAPP_OPTIONS_FILE',str(tmp_path/'options.json'))
     monkeypatch.setenv('LAUFAPP_TRANSFER_DIR',str(tmp_path/'transfer'))
     monkeypatch.delenv('OPENAI_API_KEY',raising=False)
-    import main_v0210
-    with TestClient(main_v0210.app) as c:
+    import main_v0211
+    with TestClient(main_v0211.app) as c:
         yield c
 
 @pytest.fixture

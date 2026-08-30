@@ -1,0 +1,10 @@
+# Add the secrets first:
+#   laufapp_health_auto_export_token: "<same strong token as in Laufapp app options>"
+#   laufapp_hae_webhook_id: "<existing or newly generated 32+ character random webhook ID>"
+#
+# Then merge this block into /config/configuration.yaml.
+# The custom integration must exist at:
+#   /config/custom_components/laufapp_hae_relay/
+laufapp_hae_relay:
+  webhook_id: !secret laufapp_hae_webhook_id
+  token: !secret laufapp_health_auto_export_token

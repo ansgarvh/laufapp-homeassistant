@@ -31,7 +31,7 @@ jobs:
       - name: Dependency vulnerability audit
         run: pip-audit -r laufapp/requirements.txt
       - name: Python compile check
-        run: python -m compileall -q laufapp/app tests scripts
+        run: python -m compileall -q laufapp/app custom_components/laufapp_hae_relay tests scripts
       - name: JavaScript syntax check
         run: |
           node --check laufapp/app/static/app.js
