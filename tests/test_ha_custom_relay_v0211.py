@@ -146,8 +146,6 @@ class FakeHass:
 
 def test_large_payload_over_template_ceiling_is_forwarded_byte_for_byte(monkeypatch):
     relay, _ = _load_component(monkeypatch)
-    # Realistic valid JSON that is deliberately larger than Home Assistant's
-    # 262144-character automation-template output ceiling.
     body = (
         b'{"data":{"workouts":[],"metrics":[]},"synthetic_detail":"'
         + b"x" * 300_000
@@ -232,3 +230,45 @@ def test_duplicate_webhook_fails_closed(monkeypatch):
         }
     }
     assert asyncio.run(relay.async_setup(FakeHass(), config)) is False
+
+
+def test_public_webhook_rate_limit_stops_request_flood_before_forwarding(monkeypatch):
+    relay, webhook = _load_component(monkeypatch)
+    registrations = []
+    webhook.async_register = lambda *args, **kwargs: registrations.append((args, kwargs))
+    session = FakeSession()
+    relay.async_get_clientsession = lambda _hass: session
+    hass = FakeHass()
+    config = {relay.DOMAIN: {relay.CONF_WEBHOOK_ID: WEBHOOK_ID, relay.CONF_TOKEN: STRONG_TOKEN}}
+
+    assert asyncio.run(relay.async_setup(hass, config)) is True
+    handler = registrations[0][0][4]
+
+    async def exercise():
+        responses = []
+        for _ in range(relay.MAX_REQUESTS_PER_MINUTE + 1):
+            responses.append(await handler(hass, WEBHOOK_ID, FakeRequest(b"{}")))
+        return responses
+
+    responses = asyncio.run(exercise())
+    assert all(r.status == 200 for r in responses[:-1])
+    assert responses[-1].status == 429
+    assert len(session.calls) == relay.MAX_REQUESTS_PER_MINUTE
+
+
+def test_slow_public_webhook_body_times_out(monkeypatch):
+    relay, _ = _load_component(monkeypatch)
+
+    class SlowContent:
+        async def iter_chunked(self, _size):
+            yield b"{"
+            await asyncio.sleep(0.05)
+            yield b"}"
+
+    request = FakeRequest(b"{}")
+    request.content = SlowContent()
+    request.content_length = None
+    relay.READ_TIMEOUT_SECONDS = 0.01
+
+    response = asyncio.run(relay._forward_to_laufapp(FakeHass(), request, STRONG_TOKEN))
+    assert response.status == 408
