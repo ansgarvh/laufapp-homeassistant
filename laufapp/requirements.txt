@@ -4,3 +4,4 @@ uvicorn[standard]==0.48.0
 python-multipart==0.0.32
 pydantic==2.13.5
 openai==2.54.0
+defusedxml==0.7.1
