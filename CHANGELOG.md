@@ -1,5 +1,17 @@
 # Laufapp Changelog
 
+## v0.2.8 – 2026-08-30
+
+- Erfolgreiche `/api/health`- und Gateway-`/health`-Polls werden aus dem Uvicorn-Access-Log gefiltert, damit Supervisor-/Watchdog-Abfragen relevante Fehler nicht mehr aus dem Logpuffer verdrängen; fehlgeschlagene Health-Requests und alle anderen API-Aufrufe bleiben sichtbar.
+- Jeder Apple-Health-Hintergrundjob erhält eine persistente, begrenzte Diagnosehistorie unter `/data/import_status/<job-uuid>.diagnostics.jsonl` mit Queue-/Start-/Fortsetzungs-/Retry-/Abschlussereignissen sowie Phasenwechseln, Fortschritt und Importdetailzählern.
+- Background-Importfehler speichern nun Exception-Typ, letzte bekannte Phase, Fortschritt, Detaildaten und den vollständigen Python-Traceback dauerhaft; derselbe Traceback wird zusätzlich mit Job-ID und Phase nach stderr geschrieben.
+- Neuer Ingress-geschützter Diagnoseendpunkt `GET /api/apple-health/import-jobs/{job_id}/diagnostics`; der separat erreichbare Health-Auto-Export-Gateway exponiert diese Read-Daten weiterhin nicht.
+- Unterbrochene Importe protokollieren beim Neustart explizit `resumed_after_restart`. `run.sh` protokolliert außerdem Prozessstarts, SIGTERM/SIGINT sowie PID und Exitstatus des Main- oder Gateway-Prozesses, bevor das Add-on beendet wird.
+- Keine Datenbankschemamigration und keine Änderung an Trainingslogik, Apple-Health-Deduplication, Transaktions-/Rollback-Verhalten, detaillierten Samples, GPS-Daten oder Bestzeitenlogik.
+- Release-Gates erweitert: Produktions-Entry-Point v0.2.8 wird in der Regression verwendet; zusätzliche Tests decken persistente Diagnose, vollständige Tracebacks, Wiederaufnahme nach Neustart, Healthcheck-Logfilter und Shell-Syntax ab.
+- Validierung des vorletzten Branch-Stands: Laufapp CI #171 und Laufapp Security #16 erfolgreich. Der finale Dokumentationscommit wird vor Merge erneut vollständig geprüft.
+- Statisch/isoliert und in Linux/Docker getestet; reale Home-Assistant-/Supervisor-/Nabu-Casa-/VPN-/Health-Auto-Export-iPhone-Integration muss lokal auf dem Beelink verifiziert werden.
+
 ## v0.2.7 – 2026-08-30
 
 - Home-Assistant-Ingress-Vertrauensgrenze gehärtet: Uvicorn vertraut keine beliebigen Proxy-Header mehr; in Produktion wird ausschließlich die reale TCP-Quelle des Home-Assistant-Ingress-Proxys `172.30.32.2` akzeptiert, Loopback nur für `/api/health`. Gefälschte `X-Forwarded-For`-/Ingress-Header werden in einem Docker-Negativtest explizit abgewehrt.

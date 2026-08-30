@@ -29,6 +29,13 @@ def test_background_import_returns_after_upload_and_persists_status(setup_client
     assert job['progress']==1 and job['result']['runs_added']==1 and job['result']['metrics_added']==1
     assert c.get('/api/apple-health/import-jobs/latest').json()['id']==created['id']
     runs=c.get('/api/runs').json();assert any(x['external_id']=='bg-run' for x in runs)
+    diag=c.get(f"/api/apple-health/import-jobs/{created['id']}/diagnostics")
+    assert diag.status_code==200,diag.text
+    events=diag.json()['events']
+    assert events and events[0]['event']=='queued'
+    assert any(e['event']=='progress' and e.get('phase') for e in events)
+    assert events[-1]['event']=='completed'
+    assert events[-1]['summary']['runs_added']==1
 
 
 def test_failed_background_import_rolls_back_health_data(setup_client,tmp_path):
@@ -37,6 +44,19 @@ def test_failed_background_import_rolls_back_health_data(setup_client,tmp_path):
     with p.open('rb') as f:r=c.post('/api/apple-health/import-jobs',files={'file':('broken.zip',f,'application/zip')})
     job=wait_job(c,r.json()['id']);assert job['status']=='failed'
     assert len(c.get('/api/runs').json())==before
+    diag=c.get(f"/api/apple-health/import-jobs/{r.json()['id']}/diagnostics")
+    assert diag.status_code==200,diag.text
+    failed=[e for e in diag.json()['events'] if e['event']=='failed']
+    assert failed
+    assert failed[-1]['error_type']
+    assert 'Traceback (most recent call last)' in failed[-1]['traceback']
+    # The persisted diagnostic survives clearing of the short-lived progress file.
+    assert failed[-1]['phase']
+
+
+def test_diagnostics_unknown_job_returns_404(setup_client):
+    r=setup_client.get('/api/apple-health/import-jobs/999999/diagnostics')
+    assert r.status_code==404
 
 
 def test_interrupted_processing_job_is_resumed_on_app_manager_start(setup_client):
@@ -58,3 +78,5 @@ def test_interrupted_processing_job_is_resumed_on_app_manager_start(setup_client
     assert finished['status']=='completed'
     assert finished['result']['runs_added']==1
     assert not source.exists()
+    events=c.get(f"/api/apple-health/import-jobs/{job['id']}/diagnostics").json()['events']
+    assert any(e['event']=='resumed_after_restart' for e in events)

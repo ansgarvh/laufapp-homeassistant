@@ -3,15 +3,20 @@ from __future__ import annotations
 import json
 import os
 import threading
+import traceback
 import uuid
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from db import data_dir, db_conn, rows
 from health_import import import_apple_health
 from training import predict_all, mark_plan_stale
+
+
+_DIAGNOSTIC_LOCK = threading.Lock()
 
 
 def _status_dir() -> Path:
@@ -35,6 +40,10 @@ def _status_path(job_uuid: str) -> Path:
     return _status_dir() / f"{job_uuid}.json"
 
 
+def _diagnostic_path(job_uuid: str) -> Path:
+    return _status_dir() / f"{job_uuid}.diagnostics.jsonl"
+
+
 def _write_live_status(job_uuid: str, payload: dict[str, Any]) -> None:
     path = _status_path(job_uuid)
     tmp = path.with_suffix(".tmp")
@@ -51,6 +60,41 @@ def _read_live_status(job_uuid: str) -> dict[str, Any]:
 
 def _clear_live_status(job_uuid: str) -> None:
     _status_path(job_uuid).unlink(missing_ok=True)
+
+
+def _append_diagnostic(job_uuid: str, event: str, **payload: Any) -> None:
+    """Append a persistent diagnostic event without ever breaking an import."""
+    entry = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "event": event,
+        **payload,
+    }
+    try:
+        line = json.dumps(entry, ensure_ascii=False, default=str) + "\n"
+        with _DIAGNOSTIC_LOCK:
+            with _diagnostic_path(job_uuid).open("a", encoding="utf-8") as fh:
+                fh.write(line)
+    except (OSError, TypeError, ValueError):
+        # Diagnostics must remain strictly side-effect-only. The health import
+        # must never fail because its diagnostic file cannot be written.
+        pass
+
+
+def _read_diagnostics(job_uuid: str, limit: int = 200) -> list[dict[str, Any]]:
+    try:
+        with _diagnostic_path(job_uuid).open("r", encoding="utf-8") as fh:
+            tail = deque(fh, maxlen=max(1, min(500, int(limit))))
+    except OSError:
+        return []
+    out: list[dict[str, Any]] = []
+    for line in tail:
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(item, dict):
+            out.append(item)
+    return out
 
 
 def create_import_job(original_name: str, source_path: Path, file_size: int) -> dict[str, Any]:
@@ -72,6 +116,16 @@ def create_import_job(original_name: str, source_path: Path, file_size: int) -> 
         "progress": 1.0,
     }
     _write_live_status(job_uuid, payload)
+    _append_diagnostic(
+        job_uuid,
+        "queued",
+        job_id=job_id,
+        phase="Upload abgeschlossen",
+        progress=1.0,
+        original_name=original_name,
+        file_size=file_size,
+        replace_existing=False,
+    )
     return payload
 
 
@@ -92,6 +146,16 @@ def create_import_job_with_uuid(job_uuid: str, original_name: str, source_path: 
         "replace_existing": replace_existing,
     }
     _write_live_status(job_uuid, payload)
+    _append_diagnostic(
+        job_uuid,
+        "queued",
+        job_id=job_id,
+        phase="Upload abgeschlossen",
+        progress=1.0,
+        original_name=original_name,
+        file_size=file_size,
+        replace_existing=bool(replace_existing),
+    )
     return payload
 
 
@@ -147,37 +211,85 @@ def list_jobs(limit: int = 20) -> list[dict[str, Any]]:
         return [_job_dict(r) for r in rr]
 
 
-def _process_job(job_id: int) -> None:
+def job_diagnostics(job_id: int, limit: int = 200) -> dict[str, Any]:
     with db_conn() as c:
-        row = c.execute("SELECT * FROM import_jobs WHERE id=?", (job_id,)).fetchone()
-        if not row:
-            return
-        source_path = Path(row["source_path"] or "")
-        job_uuid = row["job_uuid"]
-        if not source_path.is_file():
-            c.execute(
-                "UPDATE import_jobs SET status='failed',phase='Fehler',progress=0,error_text=?,updated_at=CURRENT_TIMESTAMP,finished_at=CURRENT_TIMESTAMP WHERE id=?",
-                ("Importdatei fehlt; bitte den Export erneut hochladen.", job_id),
-            )
-            _clear_live_status(job_uuid)
-            return
-        c.execute(
-            "UPDATE import_jobs SET status='processing',phase='Entpacken',progress=.02,error_text=NULL,started_at=COALESCE(started_at,CURRENT_TIMESTAMP),updated_at=CURRENT_TIMESTAMP WHERE id=?",
+        r = c.execute(
+            "SELECT id,job_uuid,status,phase,progress,error_text,created_at,started_at,finished_at,updated_at "
+            "FROM import_jobs WHERE id=?",
             (job_id,),
-        )
+        ).fetchone()
+    if not r:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Import nicht gefunden.")
+    d = dict(r)
+    d["events"] = _read_diagnostics(d["job_uuid"], limit)
+    return d
 
-    def report(phase: str, progress: float, detail: dict[str, Any]) -> None:
-        _write_live_status(
-            job_uuid,
-            {
-                "status": "processing",
-                "phase": phase,
-                "progress": round(max(0.0, min(0.97, progress)), 4),
-                "detail": detail,
-            },
-        )
 
+def _process_job(job_id: int) -> None:
+    job_uuid: str | None = None
+    last_state: dict[str, Any] = {"phase": "Start", "progress": 0.0, "detail": {}}
     try:
+        with db_conn() as c:
+            row = c.execute("SELECT * FROM import_jobs WHERE id=?", (job_id,)).fetchone()
+            if not row:
+                return
+            source_path = Path(row["source_path"] or "")
+            job_uuid = row["job_uuid"]
+            if not source_path.is_file():
+                c.execute(
+                    "UPDATE import_jobs SET status='failed',phase='Fehler',progress=0,error_text=?,updated_at=CURRENT_TIMESTAMP,finished_at=CURRENT_TIMESTAMP WHERE id=?",
+                    ("Importdatei fehlt; bitte den Export erneut hochladen.", job_id),
+                )
+                _append_diagnostic(
+                    job_uuid,
+                    "failed",
+                    job_id=job_id,
+                    phase="Dateiprüfung",
+                    progress=0.0,
+                    error_type="FileNotFoundError",
+                    error="Importdatei fehlt; bitte den Export erneut hochladen.",
+                )
+                _clear_live_status(job_uuid)
+                return
+            c.execute(
+                "UPDATE import_jobs SET status='processing',phase='Entpacken',progress=.02,error_text=NULL,started_at=COALESCE(started_at,CURRENT_TIMESTAMP),updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                (job_id,),
+            )
+
+        last_state = {"phase": "Entpacken", "progress": 0.02, "detail": {}}
+        _append_diagnostic(job_uuid, "started", job_id=job_id, **last_state)
+        diagnostic_phase: str | None = None
+        diagnostic_bucket = -1
+
+        def report(phase: str, progress: float, detail: dict[str, Any]) -> None:
+            nonlocal diagnostic_phase, diagnostic_bucket, last_state
+            bounded = round(max(0.0, min(0.97, progress)), 4)
+            last_state = {"phase": phase, "progress": bounded, "detail": detail}
+            _write_live_status(
+                job_uuid,
+                {
+                    "status": "processing",
+                    "phase": phase,
+                    "progress": bounded,
+                    "detail": detail,
+                },
+            )
+            # Persist phase changes plus 5 %-progress buckets. This keeps even a
+            # multi-hour import diagnosable without producing an unbounded log.
+            bucket = int(bounded * 20)
+            if phase != diagnostic_phase or bucket > diagnostic_bucket:
+                _append_diagnostic(
+                    job_uuid,
+                    "progress",
+                    job_id=job_id,
+                    phase=phase,
+                    progress=bounded,
+                    detail=detail,
+                )
+                diagnostic_phase = phase
+                diagnostic_bucket = bucket
+
         # One DB transaction for the actual health data: a malformed/failed import
         # rolls back rather than leaving a half-imported dataset. Live progress is
         # written to a small status file so it remains visible without committing
@@ -213,22 +325,62 @@ def _process_job(job_id: int) -> None:
             report("Prognosen", 0.97, {"runs_added": result.get("runs_added", 0)})
             _snapshot(c, "apple_health_import")
             result["predictions"] = predict_all(c)
-            if result.get("runs_added",0):mark_plan_stale(c,"Neue Apple-Health-Läufe verfügbar")
+            if result.get("runs_added", 0):
+                mark_plan_stale(c, "Neue Apple-Health-Läufe verfügbar")
         with db_conn() as c:
             c.execute(
                 "UPDATE import_jobs SET status='completed',phase='Fertig',progress=1,result_json=?,error_text=NULL,updated_at=CURRENT_TIMESTAMP,finished_at=CURRENT_TIMESTAMP,source_path=NULL WHERE id=?",
                 (json.dumps(result, ensure_ascii=False), job_id),
             )
+        _append_diagnostic(
+            job_uuid,
+            "completed",
+            job_id=job_id,
+            phase="Fertig",
+            progress=1.0,
+            summary={
+                "runs_added": result.get("runs_added", 0),
+                "metrics_added": result.get("metrics_added", 0),
+                "samples_added": result.get("samples_added", 0),
+                "gps_points_added": result.get("gps_points_added", 0),
+                "import_mode": result.get("import_mode"),
+            },
+        )
         source_path.unlink(missing_ok=True)
         _clear_live_status(job_uuid)
     except Exception as exc:
+        trace = traceback.format_exc()
         message = str(exc)[:4000] or exc.__class__.__name__
-        with db_conn() as c:
-            c.execute(
-                "UPDATE import_jobs SET status='failed',phase='Fehler',progress=0,error_text=?,updated_at=CURRENT_TIMESTAMP,finished_at=CURRENT_TIMESTAMP WHERE id=?",
-                (message, job_id),
+        print(
+            f"APPLE_HEALTH_IMPORT_FAILED job_id={job_id} job_uuid={job_uuid or 'unknown'} "
+            f"phase={last_state.get('phase', 'unknown')}\n{trace}",
+            flush=True,
+        )
+        if job_uuid:
+            _append_diagnostic(
+                job_uuid,
+                "failed",
+                job_id=job_id,
+                phase=last_state.get("phase", "unknown"),
+                progress=last_state.get("progress", 0.0),
+                detail=last_state.get("detail", {}),
+                error_type=exc.__class__.__name__,
+                error=message,
+                traceback=trace,
             )
-        _clear_live_status(job_uuid)
+        try:
+            with db_conn() as c:
+                c.execute(
+                    "UPDATE import_jobs SET status='failed',phase='Fehler',progress=0,error_text=?,updated_at=CURRENT_TIMESTAMP,finished_at=CURRENT_TIMESTAMP WHERE id=?",
+                    (message, job_id),
+                )
+        except Exception:
+            print(
+                f"APPLE_HEALTH_IMPORT_STATUS_UPDATE_FAILED job_id={job_id}\n{traceback.format_exc()}",
+                flush=True,
+            )
+        if job_uuid:
+            _clear_live_status(job_uuid)
     finally:
         MANAGER.finished(job_id)
 
@@ -247,11 +399,25 @@ class ImportManager:
         # retry: the health-data transaction would have rolled back and all
         # inserts are deduplicated.
         with db_conn() as c:
+            interrupted = [
+                (int(r["id"]), r["job_uuid"])
+                for r in c.execute(
+                    "SELECT id,job_uuid FROM import_jobs WHERE status='processing' AND source_path IS NOT NULL ORDER BY id"
+                ).fetchall()
+            ]
             c.execute(
                 "UPDATE import_jobs SET status='queued',phase='Wird fortgesetzt',progress=0,updated_at=CURRENT_TIMESTAMP "
                 "WHERE status='processing' AND source_path IS NOT NULL"
             )
             pending = [int(r["id"]) for r in c.execute("SELECT id FROM import_jobs WHERE status='queued' AND source_path IS NOT NULL ORDER BY id").fetchall()]
+        for interrupted_id, interrupted_uuid in interrupted:
+            _append_diagnostic(
+                interrupted_uuid,
+                "resumed_after_restart",
+                job_id=interrupted_id,
+                phase="Wird fortgesetzt",
+                progress=0.0,
+            )
         for job_id in pending:
             self.submit(job_id)
 
@@ -293,5 +459,13 @@ def retry_job(job_id: int) -> dict[str, Any]:
             "UPDATE import_jobs SET status='queued',phase='Wird erneut gestartet',progress=0,error_text=NULL,finished_at=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=?",
             (job_id,),
         )
+        job_uuid = row["job_uuid"]
+    _append_diagnostic(
+        job_uuid,
+        "retry_requested",
+        job_id=job_id,
+        phase="Wird erneut gestartet",
+        progress=0.0,
+    )
     MANAGER.submit(job_id)
     return get_job(job_id) or {}
