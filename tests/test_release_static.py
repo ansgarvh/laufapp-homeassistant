@@ -4,10 +4,10 @@ ROOT=Path(__file__).resolve().parents[1]
 
 def test_versions_and_assets():
     cfg=yaml.safe_load((ROOT/'laufapp/config.yaml').read_text())
-    assert cfg['version']=='0.2.6'
-    assert 'APP_VERSION = "0.2.6"' in (ROOT/'laufapp/app/main_v026.py').read_text()
-    assert 'ARG BUILD_VERSION=0.2.6' in (ROOT/'laufapp/Dockerfile').read_text()
-    assert 'main_v026:app' in (ROOT/'laufapp/run.sh').read_text()
+    assert cfg['version']=='0.2.7'
+    assert 'APP_VERSION = "0.2.7"' in (ROOT/'laufapp/app/main_v027.py').read_text()
+    assert 'ARG BUILD_VERSION=0.2.7' in (ROOT/'laufapp/Dockerfile').read_text()
+    assert 'main_v027:app' in (ROOT/'laufapp/run.sh').read_text()
     static=ROOT/'laufapp/app/static'
     for name in ['index.html','styles.css','bugfix.css','app.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','assets/bugfix.css','assets/v020.js','assets/v020.css','assets/v020_science.js','assets/v020_science.css','assets/v023_aggressiveness.js','assets/v025.js','assets/v025.css']:assert (static/name).exists()
     m=json.loads((static/'manifest.webmanifest').read_text());assert m['display']=='standalone'
@@ -40,12 +40,22 @@ def test_ha_app_config_and_health_auto_export_gateway():
     assert cfg['schema']['health_auto_export_token']=='password'
     assert cfg['ports']['8099/tcp'] is None and cfg['ports']['8100/tcp'] is None
     assert 'share:rw' in cfg.get('map',[])
+    assert 'verschlüsseltes VPN oder HTTPS' in cfg['ports_description']['8100/tcp']
     run=(ROOT/'laufapp/run.sh').read_text()
     assert 'health_auto_export_gateway:app' in run and '--port 8100' in run
+    assert '--no-proxy-headers' in run and '--no-server-header' in run
+    assert '--forwarded-allow-ips' not in run
     gateway=(ROOT/'laufapp/app/health_auto_export_gateway.py').read_text()
     assert '@app.post("/health-auto-export")' in gateway
-    hae=(ROOT/'laufapp/app/health_auto_export_v026.py').read_text()
-    assert 'hmac.compare_digest' in hae and 'MAX_BODY_BYTES' in hae
+    assert 'openapi_url=None' in gateway and 'Cache-Control' in gateway
+    hae=(ROOT/'laufapp/app/health_auto_export_v027.py').read_text()
+    assert 'MIN_TOKEN_LENGTH = 48' in hae and 'previous.authorized' in hae
+    assert 'Workout-ID kollidiert' in hae
+    runtime=(ROOT/'laufapp/app/main_v027.py').read_text()
+    assert 'host != "172.30.32.2"' in runtime
+    assert 'request.stream()' in runtime
+    assert 'Content-Type application/json erforderlich' in runtime
+    assert '"predictions"' not in runtime.split('return {"ok": True, **result}',1)[0][-500:]
     assert not (ROOT/'laufapp/app/main_v030.py').exists()
     assert not (ROOT/'laufapp/app/ios_healthkit_sync.py').exists()
 
@@ -74,12 +84,12 @@ def test_dockerfile_copy_sources_exist_in_build_context():
     assert 'COPY app/requirements.txt /tmp/requirements.txt' not in text
 
 
-def test_github_repository_layout():
+def test_github_repository_layout_and_security_audit():
     repo=yaml.safe_load((ROOT/'repository.yaml').read_text())
     assert repo['name']=='Laufapp Home Assistant Repository'
     assert repo['url']=='https://github.com/ansgarvh/laufapp-homeassistant'
     workflow=(ROOT/'.github/workflows/ci.yml').read_text()
-    for required in ['pytest -q','python -m compileall','node --check','docker build','v023_aggressiveness.js','v025.js','health-auto-export','ci-secret']:
+    for required in ['pytest -q','python -m compileall','node --check','docker build','v023_aggressiveness.js','v025.js','health-auto-export','pip-audit','X-Forwarded-For']:
         assert required in workflow
     assert 'ios-build' not in workflow
-    assert (ROOT/'requirements-dev.txt').is_file()
+    assert 'pip-audit==2.10.1' in (ROOT/'requirements-dev.txt').read_text()
