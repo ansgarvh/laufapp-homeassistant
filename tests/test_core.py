@@ -82,6 +82,6 @@ def test_imported_or_manual_run_can_be_enriched_with_shoe_and_rpe(setup_client):
     r=c.patch(f'/api/runs/{rid}',json={'shoe_id':sid,'rpe':7,'notes':'kontrolliert'}); assert r.status_code==200
     assert r.json()['shoe_model']=='Magic Speed 5' and r.json()['rpe']==7 and r.json()['notes']=='kontrolliert'
 
-def test_prepare_repository_transfer_endpoint(setup_client):
+def test_repository_transfer_endpoint_is_retired(setup_client):
     r=setup_client.post('/api/system/prepare-repository-transfer')
-    assert r.status_code==200 and r.json()['transfer']['size_bytes']>0
+    assert r.status_code in (404,405)
