@@ -23,8 +23,7 @@ uvicorn main_v027:app \
   --limit-concurrency 64 --timeout-keep-alive 5 &
 MAIN_PID=$!
 
-# Start the externally optional gateway only after the main app completed its
-# lifespan startup (database migration/init and background job recovery).
+# Wait until database migration/init and background-job recovery completed.
 READY=0
 for _ in $(seq 1 60); do
   if python - <<'PY' >/dev/null 2>&1
@@ -41,17 +40,29 @@ PY
   sleep 0.5
 done
 if [[ "$READY" != "1" ]]; then
-  echo "Laufapp main process did not become ready; refusing to start sync gateway." >&2
+  echo "Laufapp main process did not become ready." >&2
   exit 1
 fi
 
-uvicorn health_auto_export_gateway:app \
-  --host 0.0.0.0 --port 8100 \
-  --no-proxy-headers --no-server-header \
-  --limit-concurrency 8 --timeout-keep-alive 5 &
-GATEWAY_PID=$!
+# Fail closed: the optional sync port is not opened at all until a sufficiently
+# strong secret is configured. The normal Ingress application remains usable.
+if python - <<'PY' >/dev/null 2>&1
+import health_auto_export_v027 as hae
+raise SystemExit(0 if hae.token_configuration_error() is None else 1)
+PY
+then
+  uvicorn health_auto_export_gateway:app \
+    --host 0.0.0.0 --port 8100 \
+    --no-proxy-headers --no-server-header \
+    --limit-concurrency 8 --timeout-keep-alive 5 &
+  GATEWAY_PID=$!
+  wait -n "$MAIN_PID" "$GATEWAY_PID"
+  STATUS=$?
+else
+  echo "Health Auto Export gateway disabled until a strong sync token is configured." >&2
+  wait "$MAIN_PID"
+  STATUS=$?
+fi
 
-wait -n "$MAIN_PID" "$GATEWAY_PID"
-STATUS=$?
 cleanup
 exit "$STATUS"
