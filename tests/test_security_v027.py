@@ -1,3 +1,4 @@
+import asyncio
 import sqlite3
 
 from fastapi.testclient import TestClient
@@ -91,6 +92,27 @@ def test_sync_requires_json_and_enforces_streaming_size_limit(monkeypatch, tmp_p
             content=b"{" + b" " * 64 + b"}",
         )
         assert r.status_code == 413
+
+
+def test_sync_stream_timeout(monkeypatch):
+    class SlowRequest:
+        headers = {"content-type": "application/json"}
+
+        async def stream(self):
+            yield b"{"
+            await asyncio.sleep(0.05)
+            yield b"}"
+
+    monkeypatch.setattr(main_v027, "REQUEST_BODY_TIMEOUT_SECONDS", 0.01)
+
+    async def run():
+        try:
+            await main_v027._read_limited_json(SlowRequest())
+            assert False, "slow upload must time out"
+        except main_v027.HTTPException as exc:
+            assert exc.status_code == 408
+
+    asyncio.run(run())
 
 
 def test_sync_response_is_write_only_and_uuid_collision_is_rejected(monkeypatch, tmp_path):
