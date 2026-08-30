@@ -1,0 +1,13 @@
+# Merge this block into Home Assistant configuration.yaml.
+# If a rest_command: section already exists, add only the child entry below.
+# The hostname is the Supervisor-internal DNS name of Laufapp when installed
+# from https://github.com/ansgarvh/laufapp-homeassistant.
+rest_command:
+  laufapp_health_auto_export_relay:
+    url: "http://c87ed7df-laufapp:8100/home-assistant-relay"
+    method: POST
+    headers:
+      X-Laufapp-Token: !secret laufapp_health_auto_export_token
+    content_type: "application/json"
+    payload: "{{ payload }}"
+    timeout: 120
