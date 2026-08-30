@@ -1,22 +1,23 @@
-# Laufapp v0.2.11
+# Laufapp v0.2.12
 
 Private, mobile-first Lauf-PWA für Home Assistant OS. Laufapp verbindet eine lokale Trainings-/Prognoseengine mit Apple-Health-Daten, Health Auto Export und einem optionalen OpenAI-Coach. Die Anwendung ist für einen einzelnen privaten Nutzer ausgelegt.
 
-## Neu in v0.2.11 – große Health-Auto-Export-Payloads ohne Template-Limit
+## Neu in v0.2.12 – reale deutsche Health-Auto-Export-Läufe
 
-v0.2.11 ersetzt für detaillierte HAE-Workouts den v0.2.10-Automations-/`rest_command`-Relay durch eine kleine Home-Assistant-Custom-Integration:
-
-`iPhone / HAE → HTTPS → <remote-id>.ui.nabu.casa/api/webhook/<secret-id> → Home Assistant Custom Integration → internes App-Netz → Laufapp`
+v0.2.12 behebt einen mit echten HAE-JSON-v2-Exporten nachgewiesenen Kompatibilitätsfehler: Deutsche Apple-Laufworkouts kommen in Health Auto Export als `Outdoor Ausführen` an. Der bisherige Parser akzeptierte nur Workout-Namen mit `run` oder `lauf` und verwarf diese Läufe daher, bevor Distanz, Herzfrequenz oder GPS verarbeitet wurden.
 
 Wesentliche Änderungen:
 
-- **Kein Jinja-Serialisieren großer HAE-Payloads mehr:** Der neue Handler liest den Webhook-Body direkt. Damit umgeht er die reale Home-Assistant-Fehlermeldung `Template output exceeded maximum size of 262144 characters`, die bei sekündlichen Workout-Metriken auftrat.
-- **Nabu Casa Remote UI statt dediziertem Cloudhook:** In der realen Zielinstallation erreichte ein kleiner Request den Cloudhook, während der große HAE-Request dort HTTP 413 erhielt. Der bereits erfolgreich getestete `.ui.nabu.casa/api/webhook/...`-Pfad wird deshalb direkt verwendet.
-- **Separate Custom Integration:** `custom_components/laufapp_hae_relay` registriert einen POST-only-Webhook, akzeptiert ausschließlich JSON, begrenzt den Body auf 16 MiB und leitet die Bytes ohne Jinja/Automation an `http://c87ed7df-laufapp:8100/home-assistant-relay` weiter.
-- **Zwei getrennte Geheimnisse:** Die öffentliche Webhook-ID bleibt geheim; der starke Laufapp-Token wird ausschließlich auf dem internen Home-Assistant→Laufapp-Hop als `X-Laufapp-Token` ergänzt.
-- **Port 8100 bleibt unveröffentlicht:** Die Custom Integration nutzt den Supervisor-internen DNS-Namen. Eine Host-/Router-Portfreigabe ist nicht erforderlich.
-- **Legacy-Pfad bleibt dokumentiert, aber nicht für echte Workout-Payloads empfohlen:** Die v0.2.10-Webhook-Automation und der `rest_command` bleiben als kleine Diagnose-/Kompatibilitätsbeispiele im Repository, sind jedoch wegen des 262144-Zeichen-Template-Limits nicht der Produktionspfad für detaillierte HAE-Daten.
-- **Keine Datenbankschemamigration und keine Änderung an Trainingslogik, Prognosen, Ingress, Apple-Health-Historienimport oder HAE-Importer.**
+- **Lokalisierte Laufnamen:** `Outdoor Ausführen` und `Indoor Ausführen` werden als Laufworkouts erkannt; bestehende englische und deutsche Running-/Lauf-Bezeichnungen bleiben kompatibel.
+- **Reale HAE-Feldformen getestet:** Regressionstests basieren auf den beobachteten Strukturen eines 34,020-km-Laufs und eines 0,933-km-Laufs. Workout-ID, offizielle Distanz, Dauer, Herzfrequenz, Kadenz und GPS-Route bleiben unverändert und werden weiterhin vom bestehenden gehärteten Importer gespeichert.
+- **Aktive Energie robust:** Ein vorhandenes `activeEnergyBurned`-Summenfeld bleibt maßgeblich. Fehlt es, kann v0.2.12 eine vollständig valide `activeEnergy[]`-Zeitreihe in kcal aggregieren. `totalEnergy` wird dabei nicht als aktive Energie missinterpretiert, weil es auch Grundumsatzenergie enthalten kann.
+- **Offizielle Distanz bleibt autoritativ:** GPS-Punkte dienen Route/Höhenprofil und ersetzen nicht die HAE-Workout-Distanz. Rohe GPS-Höhenwerte werden nicht naiv zu Höhenmetern aufsummiert.
+- **Route Data erforderlich:** Ist die HAE-Option zum Einschließen der Route aktiviert, liegt die GPS-Route bereits im JSON unter `route`; eine separate GPX-Datei muss serverseitig nicht zusätzlich verarbeitet werden.
+- **Keine Datenbankschemamigration:** Trainingslogik, Prognosen, Bestzeiten, historischer Apple-Health-Import, Deduplizierung, Home-Assistant-Ingress und der v0.2.11-Nabu-Casa-Relay bleiben unverändert.
+
+Der v0.2.11-Transport für große HAE-Payloads bleibt bestehen:
+
+`iPhone / HAE → HTTPS → <remote-id>.ui.nabu.casa/api/webhook/<secret-id> → Home Assistant Custom Integration → internes App-Netz → Laufapp`
 
 Die vollständige Einrichtung steht in `NABU_CASA_HEALTH_SYNC.md`. Die Home-Assistant-Konfigurationsbeispiele liegen unter `home_assistant/`.
 
@@ -46,14 +47,14 @@ Ausführliche Details und verbleibende Risiken stehen in `SECURITY.md` und `NABU
 
 Laufapp verarbeitet Health Auto Export per REST API, JSON Export Version 2. Unterstützt werden Laufworkout, Start/Ende, Dauer, Distanz, Kalorien, Höhenmeter, mittlere und zeitaufgelöste Herzfrequenz, Running Speed, Running Power, Schrittlänge, vertikale Oszillation, Bodenkontaktzeit, Kadenz, GPS-Route/Höhe sowie Ruhepuls, HRV/SDNN, Gewicht, VO₂max und Schlafdauer.
 
-Empfohlene Lauf-Automation bei Nutzung des v0.2.11-Relays:
+Empfohlene Lauf-Automation bei Nutzung des v0.2.12-Relays:
 
 - Automation: REST API
 - Ziel-URL: `https://<remote-id>.ui.nabu.casa/api/webhook/<secret-webhook-id>`
 - Format: JSON, Export Version 2
 - Zeitraum: **Previous 7 Days / Letzte 7 Tage**
 - Daten: Workouts → Running
-- Route Data: On
+- Route Data / GPX-Routen einschließen: **On**
 - Workout Metrics: On
 - Workout Metrics Time Grouping: Seconds
 - Batch Requests: On
@@ -77,7 +78,7 @@ Der bestehende direkte Gateway-Pfad `POST /health-auto-export` bleibt aus Kompat
 
 ## Persistenz
 
-Benutzerdaten liegen im persistenten Home-Assistant-`/data`-Bereich. v0.2.11 benötigt **keine Datenbankschemamigration**; bestehende Läufe, Health-Daten, Bestzeiten, Schuhe, Rennen, Trainingsplan, Einstellungen und Coach-Daten bleiben erhalten.
+Benutzerdaten liegen im persistenten Home-Assistant-`/data`-Bereich. v0.2.12 benötigt **keine Datenbankschemamigration**; bestehende Läufe, Health-Daten, Bestzeiten, Schuhe, Rennen, Trainingsplan, Einstellungen und Coach-Daten bleiben erhalten.
 
 ## OpenAI
 
@@ -85,7 +86,7 @@ Der OpenAI-API-Key bleibt serverseitig in der Home-Assistant-App-Konfiguration u
 
 ## Release-Prüfungen
 
-Vor Merge laufen Python-Compilecheck einschließlich Custom Integration, JavaScript-Syntaxcheck, vollständige Pytest-Regression über den v0.2.11-Entry-Point, ein isolierter >262144-Zeichen-Relaytest, 16-Wochen-Marathonsimulation, neun randomisierte Läuferprofile, `pip-audit`, Bandit-Gate, Docker-Build, direkter Health-Auto-Export-E2E, interner Relay-E2E über ein separates Docker-Netz, externe Ingress-Spoofing-Negativtests sowie die positive Home-Assistant-Ingress-Netzsimulation.
+Vor Merge laufen Python-Compilecheck einschließlich Custom Integration, JavaScript-Syntaxcheck, vollständige Pytest-Regression über den v0.2.12-Entry-Point, die realitätsnahen HAE-v2-Regressionstests, ein isolierter >262144-Zeichen-Relaytest, 16-Wochen-Marathonsimulation, neun randomisierte Läuferprofile, `pip-audit`, Bandit-Gate, Docker-Build, direkter Health-Auto-Export-E2E, interner Relay-E2E über ein separates Docker-Netz, externe Ingress-Spoofing-Negativtests sowie die positive Home-Assistant-Ingress-Netzsimulation.
 
 Statisch/isoliert und in Linux/Docker getestet. Die echte Home-Assistant-OS-/Custom-Integration-/Nabu-Casa-Remote-UI-/Health-Auto-Export-iPhone-Integration muss nach Installation auf dem Zielsystem lokal verifiziert werden.
 
@@ -97,7 +98,7 @@ export LAUFAPP_DATA_DIR=/tmp/laufapp-data
 export LAUFAPP_TRANSFER_DIR=/tmp/laufapp-transfer
 export LAUFAPP_TRUSTED_INGRESS_ONLY=0
 export LAUFAPP_HEALTH_AUTO_EXPORT_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
-uvicorn main_v0211:app --host 127.0.0.1 --port 8099 --no-proxy-headers
+uvicorn main_v0212:app --host 127.0.0.1 --port 8099 --no-proxy-headers
 ```
 
-Weitere Details: `SECURITY.md`, `NABU_CASA_HEALTH_SYNC.md`, `RELEASE_NOTES_v0.2.11.md`, `TRAINING_ENGINE.md`, `MIGRATIONS.md`.
+Weitere Details: `SECURITY.md`, `NABU_CASA_HEALTH_SYNC.md`, `RELEASE_NOTES_v0.2.12.md`, `TRAINING_ENGINE.md`, `MIGRATIONS.md`.

@@ -1,5 +1,16 @@
 # Laufapp Changelog
 
+## v0.2.12 – 2026-08-30
+
+- Mit zwei realen Health-Auto-Export-JSON-v2-Workouts nachgewiesenen Importfehler behoben: Deutsche Laufworkouts heißen in den vorliegenden HAE-Daten `Outdoor Ausführen` und wurden vom bisherigen `run`/`lauf`-Namensfilter vollständig verworfen.
+- Neue additive HAE-Kompatibilitätsschicht erkennt lokalisierte Laufbezeichnungen, ohne den bestehenden gehärteten v0.2.7-Importer, dessen Authentifizierung, Größenlimits, Workout-ID-Kollisionsschutz, Cross-Source-Deduplizierung oder persistente SQLite-Logik zu ersetzen.
+- `activeEnergyBurned` bleibt als explizite HAE-Zusammenfassung maßgeblich. Fehlt das Feld, wird eine vollständig valide `activeEnergy[]`-Zeitreihe nach kcal aggregiert; bei unbekannten/mischten Einheiten wird kein Teilwert erfunden. `totalEnergy` wird nicht als aktive Energie missinterpretiert.
+- Die offizielle HAE-Workout-Distanz bleibt autoritativ; GPS wird nicht zur Ersetzung der Gesamtdistanz aufsummiert. Rohe GPS-Höhenwerte werden nicht naiv zu Höhenmetern summiert, da reale 1-Hz-Routendaten hierfür deutlich zu stark rauschen können.
+- Mit aktivierter HAE-Option zum Einschließen der Route wird das JSON-`route`-Array verarbeitet; die parallel exportierte GPX-Datei ist für den REST-Import nicht zusätzlich erforderlich.
+- Neue Regressionstests bilden die real beobachteten Feldformen eines 34,020-km-Laufs und eines 0,933-km-Laufs nach, prüfen GPS/Herzfrequenz/Kadenz, Energie-Fallback, explizite Energie-Zusammenfassung, Nicht-Lauf-Ausschluss und idempotenten Reimport.
+- Keine Datenbankschemamigration und keine Änderung an Trainingslogik, Prognosen, Bestzeiten, historischem Apple-Health-ZIP/XML-Import, Home-Assistant-Ingress oder dem v0.2.11-Raw-JSON-Relay.
+- Statisch/isoliert und in Linux/Docker zu verifizieren; reale Home-Assistant-OS-/Nabu-Casa-/Health-Auto-Export-iPhone-Integration muss nach Installation auf dem Zielsystem bestätigt werden.
+
 ## v0.2.11 – 2026-08-30
 
 - Reale HAE-Großpayload-Grenze behoben: detaillierte Sekunden-Workouts scheiterten im v0.2.10-Automationspfad an Home Assistants `Template output exceeded maximum size of 262144 characters`.
@@ -44,7 +55,7 @@
 - Unterbrochene Importe protokollieren beim Neustart explizit `resumed_after_restart`. `run.sh` protokolliert außerdem Prozessstarts, SIGTERM/SIGINT sowie PID und Exitstatus des Main- oder Gateway-Prozesses, bevor das Add-on beendet wird.
 - Keine Datenbankschemamigration und keine Änderung an Trainingslogik, Apple-Health-Deduplication, Transaktions-/Rollback-Verhalten, detaillierten Samples, GPS-Daten oder Bestzeitenlogik.
 - Release-Gates erweitert: Produktions-Entry-Point v0.2.8 wird in der Regression verwendet; zusätzliche Tests decken persistente Diagnose, vollständige Tracebacks, Wiederaufnahme nach Neustart, Healthcheck-Logfilter und Shell-Syntax ab.
-- Validierung des vorletzten Branch-Stands: Laufapp CI #171 und Laufapp Security #16 erfolgreich. Der finale Dokumentationscommit wird vor Merge erneut vollständig geprüft.
+- Validierung des vorletzten Branch-Stands: Laufapp CI #171 und Laufapp Security #16 erfolgreich. Der finale Release-Metadatenstand wird vor Merge erneut vollständig geprüft.
 - Statisch/isoliert und in Linux/Docker getestet; reale Home-Assistant-/Supervisor-/Nabu-Casa-/VPN-/Health-Auto-Export-iPhone-Integration muss lokal auf dem Beelink verifiziert werden.
 
 ## v0.2.7 – 2026-08-30
@@ -58,7 +69,7 @@
 - Bandit-Security-Scan mit review-bewusstem Gate ergänzt; neue Medium/High-Findings blockieren die CI. GitHub Actions sind auf konkrete Commit-SHAs gepinnt und besitzen nur `contents: read`.
 - Dynamische Frontend-Renderpfade auf Stored/Reflected XSS geprüft; im geprüften Pfad keine offene XSS-Lücke gefunden.
 - Keine Datenbankschemamigration und keine fachliche Änderung der Trainingslogik.
-- Statisch/isoliert und in Linux/Docker getestet; reale Home-Assistant-/Supervisor-/VPN-/Health-Auto-Export-iPhone-Integration muss lokal verifiziert werden.
+- Statisch/isoliert getestet; Home-Assistant-/Supervisor-/VPN-/Health-Auto-Export-iPhone-Integration muss lokal verifiziert werden.
 
 ## v0.2.6 – 2026-08-30
 
