@@ -6,6 +6,7 @@ trust boundary without changing persistent data or training behavior.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 
@@ -19,6 +20,7 @@ from db import db_conn
 from performance_marks_v024 import sync_apple_health_best_marks
 
 APP_VERSION = "0.2.7"
+REQUEST_BODY_TIMEOUT_SECONDS = 120
 
 # Propagate release metadata through the existing compatibility stack.
 _module = previous
@@ -108,10 +110,14 @@ async def _read_limited_json(request: Request):
             raise HTTPException(status_code=413, detail="Health Auto Export Payload ist zu groß.")
 
     body = bytearray()
-    async for chunk in request.stream():
-        if len(body) + len(chunk) > hae.MAX_BODY_BYTES:
-            raise HTTPException(status_code=413, detail="Health Auto Export Payload ist zu groß.")
-        body.extend(chunk)
+    try:
+        async with asyncio.timeout(REQUEST_BODY_TIMEOUT_SECONDS):
+            async for chunk in request.stream():
+                if len(body) + len(chunk) > hae.MAX_BODY_BYTES:
+                    raise HTTPException(status_code=413, detail="Health Auto Export Payload ist zu groß.")
+                body.extend(chunk)
+    except TimeoutError as exc:
+        raise HTTPException(status_code=408, detail="Health Auto Export Upload hat das Zeitlimit überschritten.") from exc
     if not body:
         raise HTTPException(status_code=400, detail="Leerer Health Auto Export Payload.")
     try:
