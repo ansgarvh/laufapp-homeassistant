@@ -106,23 +106,19 @@ def test_home_assistant_relay_imports_and_retries_idempotently(monkeypatch, tmp_
     assert "version" not in first_body
 
 
-def test_home_assistant_relay_examples_do_not_embed_secrets_and_mark_template_path_legacy():
-    rest = (ROOT / "home_assistant/rest_command_laufapp_nabu_casa.yaml.example").read_text()
-    automation = (ROOT / "home_assistant/automation_laufapp_nabu_casa.yaml.example").read_text()
+def test_only_current_home_assistant_relay_example_remains_and_uses_secrets():
+    rest = ROOT / "home_assistant/rest_command_laufapp_nabu_casa.yaml.example"
+    automation = ROOT / "home_assistant/automation_laufapp_nabu_casa.yaml.example"
     direct = (ROOT / "home_assistant/laufapp_hae_relay_configuration.yaml.example").read_text()
     docs = (ROOT / "NABU_CASA_HEALTH_SYNC.md").read_text()
 
-    assert "http://c87ed7df-laufapp:8100/home-assistant-relay" in rest
-    assert "X-Laufapp-Token: !secret laufapp_health_auto_export_token" in rest
-    assert STRONG_TOKEN not in rest
-    assert "LEGACY / SMALL-PAYLOAD EXAMPLE ONLY" in rest
-    assert "REPLACE_WITH_A_NEW_RANDOM_WEBHOOK_ID" in automation
-    assert "local_only: false" in automation
-    assert "262144" in automation
-    assert "trigger.json | to_json" in automation
+    assert not rest.exists()
+    assert not automation.exists()
     assert "laufapp_hae_relay:" in direct
     assert "!secret laufapp_hae_webhook_id" in direct
     assert "!secret laufapp_health_auto_export_token" in direct
+    assert STRONG_TOKEN not in direct
     assert "Previous 7 Days" in docs
     assert ".ui.nabu.casa/api/webhook/" in docs
     assert "Do not forward ports 8099 or 8100" in docs
+    assert "old `rest_command.laufapp_health_auto_export_relay` is not required" in docs
