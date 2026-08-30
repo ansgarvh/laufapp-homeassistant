@@ -1,14 +1,28 @@
-# Sicherheitskonzept – Laufapp v0.2.7
+# Sicherheitskonzept – Laufapp v0.2.10
 
-Laufapp ist eine private Home-Assistant-Anwendung. Dieses Dokument beschreibt die tatsächlich implementierten Schutzgrenzen. Es ist keine Behauptung absoluter Sicherheit; reale Home-Assistant-, Netzwerk- und iPhone-Integration müssen auf dem Zielsystem zusätzlich verifiziert werden.
+Laufapp ist eine private Home-Assistant-Anwendung. Dieses Dokument beschreibt die tatsächlich implementierten Schutzgrenzen. Es ist keine Behauptung absoluter Sicherheit; reale Home-Assistant-, Nabu-Casa-, Netzwerk- und iPhone-Integration müssen auf dem Zielsystem zusätzlich verifiziert werden.
 
 ## Netzwerk- und Vertrauensgrenzen
 
-Die Hauptanwendung auf Port 8099 ist ausschließlich für Home Assistant Ingress vorgesehen. Der Port ist in `config.yaml` standardmäßig nicht auf den Host veröffentlicht. Zusätzlich prüft die Anwendung in Produktion die **reale TCP-Quelladresse**: nur der Home-Assistant-Ingress-Proxy `172.30.32.2` darf auf die UI/API zugreifen. Loopback ist ausschließlich für `/api/health` zugelassen. `X-Forwarded-For`, `X-Hass-Source` und `X-Ingress-Path` werden nicht als Vertrauenssignal verwendet. Uvicorn läuft mit `--no-proxy-headers`, sodass gefälschte Forwarding-Header die Peer-Adresse nicht überschreiben können.
+Die Hauptanwendung auf Port 8099 ist ausschließlich für Home Assistant Ingress vorgesehen. Der Port ist in `config.yaml` standardmäßig nicht auf den Host veröffentlicht. Uvicorn läuft mit `--no-proxy-headers`, sodass gefälschte Forwarding-Header die reale TCP-Peer-Adresse nicht überschreiben können.
 
-Der optionale Health-Auto-Export-Gateway läuft getrennt auf Port 8100 und stellt nur `/health` und `POST /health-auto-export` bereit. OpenAPI-/Swagger-/ReDoc-Endpunkte sind deaktiviert. Port 8100 wird **gar nicht gestartet**, solange kein ausreichend starker Sync-Token konfiguriert ist. Auch Port 8100 ist standardmäßig nicht auf den Home-Assistant-Host veröffentlicht.
+Der dokumentierte Home-Assistant-Ingress-Proxy `172.30.32.2` wird direkt akzeptiert. Der in v0.2.9 ergänzte Kompatibilitätspfad akzeptiert andere Peers ausschließlich innerhalb des internen Home-Assistant-Netzes `172.30.32.0/23` und nur zusammen mit einem `X-Ingress-Path` unter `/api/hassio_ingress/` sowie einem authentifizierten Ingress-Marker (`X-Remote-User-Id` oder `X-Hass-Source: core.ingress`). Loopback ist ausschließlich für `/api/health` zugelassen. Externe Clients bleiben auch mit gefälschten Ingress-/Forwarding-Headern gesperrt.
 
-**Port 8100 niemals als unverschlüsseltes HTTP ins Internet weiterleiten.** Für Nutzung außerhalb des Heimnetzes ist ein verschlüsseltes VPN wie WireGuard/Tailscale oder ein korrekt konfigurierter HTTPS-Reverse-Proxy mit TLS, Verbindungs-/Request-Timeouts und sinnvoller Rate-Begrenzung erforderlich.
+Der Health-Auto-Export-Gateway läuft getrennt auf Port 8100. OpenAPI-/Swagger-/ReDoc-Endpunkte sind deaktiviert. Port 8100 wird **gar nicht gestartet**, solange kein ausreichend starker Sync-Token konfiguriert ist. Auch Port 8100 ist in `config.yaml` standardmäßig nicht auf den Home-Assistant-Host veröffentlicht.
+
+v0.2.10 ergänzt `POST /home-assistant-relay` als dedizierten internen Zielpfad für Nabu Casa. Health Auto Export sendet dabei über HTTPS an einen geheimen Nabu-Casa-Cloudhook. Home Assistant leitet den JSON-Body anschließend über das Supervisor-interne App-Netz an `http://c87ed7df-laufapp:8100/home-assistant-relay` weiter. Der interne HTTP-Hop verlässt den Home-Assistant-Host nicht und verlangt zusätzlich den separaten starken `X-Laufapp-Token`.
+
+**Ports 8099 und 8100 nicht ins Internet weiterleiten.** Für den vorgesehenen Nabu-Casa-Betrieb ist keine Router-Portfreigabe und keine Veröffentlichung von 8100 auf dem Home-Assistant-Host erforderlich.
+
+## Nabu Casa / Webhook-Relay
+
+- Der öffentliche Endpunkt ist ausschließlich der von Home Assistant Cloud bereitgestellte HTTPS-Cloudhook.
+- Die zufällige Webhook-ID/Cloudhook-URL ist ein Geheimnis und wird weder im Repository noch in Laufapp-Konfigurationen hinterlegt.
+- Das Cloudhook-Geheimnis ist **nicht** der Laufapp-Token. Home Assistant ergänzt `X-Laufapp-Token` erst auf dem internen Relay-Hop.
+- Der Relay-Endpunkt akzeptiert bewusst keinen Bearer-Token; der dokumentierte interne Vertrag verwendet ausschließlich `X-Laufapp-Token`.
+- Home Assistant adressiert Laufapp über den Supervisor-internen DNS-Namen; der Host-Port 8100 kann deaktiviert bleiben.
+- Die Beispielautomation arbeitet `queued` mit maximal 50 Einträgen, damit HAE-Batch-Requests seriell verarbeitet werden.
+- Ein Home-Assistant-Webhook bestätigt den Eingang nicht synchron bis zum Ende der nachgelagerten REST-Aktion. Deshalb wird für diesen Transport **Previous 7 Days / Letzte 7 Tage** statt `Since Last Sync` empfohlen. Wiederholte Übertragung ist durch die bestehende Lauf-/Sample-/GPS-/Health-Metric-Deduplizierung idempotent.
 
 ## Health Auto Export
 
@@ -48,7 +62,7 @@ Der klassische ZIP/XML-Import bleibt als Historien- und Backup-Pfad erhalten und
 
 Trainingsdaten, Wettkämpfe, Schuhe, Health-Metriken, Laufzeitreihen, GPS-Punkte, Plan und Chat-Historie liegen in SQLite unter `/data`. Der Home-Assistant-App-Code liegt getrennt im Container-Image. Vor Datenbankschemamigrationen wird ein integrity-geprüftes Backup erzeugt; Downgrades auf ein nicht unterstütztes älteres Schema werden blockiert.
 
-`openai_api_key` und `health_auto_export_token` sind Home-Assistant-Passwortoptionen und werden nicht durch die Laufapp-API an das Frontend ausgegeben. Dateierzeugung erfolgt mit restriktivem `umask 077`.
+`openai_api_key` und `health_auto_export_token` sind Home-Assistant-Passwortoptionen und werden nicht durch die Laufapp-API an das Frontend ausgegeben. Für den Nabu-Casa-Relay wird derselbe HAE-Token zusätzlich als Home-Assistant-Secret referenziert; er darf nicht im Klartext in Automation/Repository eingecheckt werden. Dateierzeugung erfolgt mit restriktivem `umask 077`.
 
 ## OpenAI / KI
 
@@ -70,6 +84,10 @@ Der Container läuft weiterhin im Home-Assistant-App-Modell mit den dort nötige
 
 Ein gültiger Health-Auto-Export-Token erlaubt weiterhin das **Schreiben** plausibler Health-Daten. Deshalb muss er wie ein Passwort behandelt und bei Verdacht sofort rotiert werden. Der Gateway ist bewusst write-only, damit derselbe Token nicht zum Auslesen persönlicher Laufdaten genutzt werden kann.
 
+Ein gültiger Nabu-Casa-Cloudhook kann die Home-Assistant-Automation auslösen. Der zweite Laufapp-Token verhindert zwar direkten Schreibzugriff auf Laufapp, dennoch muss auch die Webhook-ID geheim bleiben, um unnötige Relay-Last zu vermeiden.
+
 ## Release-Grenze
 
-Automatisiert geprüft werden Compile/Syntax, Regressionstests, Trainingssimulationen, Dependency-Audit, Bandit-Gate, Docker-Build, authentifizierter und unauthentifizierter Health-Auto-Export, idempotenter Reimport sowie ein absichtlich veröffentlichter Test-Port 8099 mit gefälschten Proxy-/Ingress-Headern. Die reale Home-Assistant-Ingress-Quelle, der reale Supervisor-Port-Mapping-Zustand, VPN/HTTPS-Konfiguration und Health Auto Export auf dem iPhone müssen nach Installation lokal verifiziert werden.
+Automatisiert geprüft werden Compile/Syntax, Regressionstests über den aktuellen Entry-Point, Trainingssimulationen, Dependency-Audit, Bandit-Gate, Docker-Build, authentifizierter und unauthentifizierter Health-Auto-Export, idempotenter Reimport, der interne Nabu-Relay-Pfad samt Bearer-Negativtest sowie die Home-Assistant-Ingress-Netzsimulation und externe Header-Spoofing-Abwehr.
+
+Statisch/isoliert und in Linux/Docker getestet. Die echte Nabu-Casa-Cloudhook-Zustellung, Home-Assistant-`rest_command`-Ausführung über den realen Supervisor-DNS-Namen sowie Health Auto Export auf dem iPhone müssen nach Installation lokal verifiziert werden.
