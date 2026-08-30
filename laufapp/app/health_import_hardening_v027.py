@@ -4,6 +4,9 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
+from defusedxml import ElementTree as DefusedET
+from defusedxml.common import DefusedXmlException
+
 import health_import as health
 
 MAX_ZIP_ENTRIES = 20_000
@@ -78,7 +81,7 @@ def hardened_import_routes(c, z, cutoff, progress=None):
                     if elevation is not None and not (-1000 <= float(elevation) <= 12000):
                         raise ValueError("Ungültige GPS-Höhe im Apple-Health-Export.")
                     points.append((seq, timestamp, lat, lon, elevation))
-        except health.ET.ParseError:
+        except (DefusedXmlException, health.ET.ParseError):
             unmatched += 1
             continue
         if not points:
@@ -108,5 +111,9 @@ def hardened_import_routes(c, z, cutoff, progress=None):
 
 
 def install() -> None:
+    # Replace the parser object used by both the top-level export.xml iterator
+    # and the GPX helper. defusedxml preserves the iterparse API while forbidding
+    # entity expansion and external references by default.
+    health.ET = DefusedET
     health.open_xml = hardened_open_xml
     health.import_routes = hardened_import_routes
