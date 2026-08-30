@@ -1,14 +1,18 @@
-# Paste this into the Home Assistant automation YAML editor.
-# IMPORTANT: replace the placeholder with a new, random webhook ID generated
-# in Home Assistant. Never commit or share the real ID.
-alias: Laufapp - Health Auto Export via Nabu Casa
-description: Relays JSON from a Nabu Casa cloud webhook to Laufapp inside the Home Assistant app network.
+# LEGACY / SMALL-PAYLOAD EXAMPLE ONLY.
+# Do not use this automation for detailed Health Auto Export workout payloads:
+# Home Assistant templates are limited to 262144 output characters, so
+# `trigger.json | to_json` can fail before the rest_command runs.
+#
+# v0.2.11 uses the custom integration in custom_components/laufapp_hae_relay
+# instead. This file remains only for backwards compatibility and diagnostics.
+alias: Laufapp - Health Auto Export via Nabu Casa (legacy small payload)
+description: Legacy relay for small JSON payloads only; use laufapp_hae_relay for real HAE workout sync.
 triggers:
   - trigger: webhook
     webhook_id: REPLACE_WITH_A_NEW_RANDOM_WEBHOOK_ID
     allowed_methods:
       - POST
-    local_only: true
+    local_only: false
 actions:
   - action: rest_command.laufapp_health_auto_export_relay
     data:
