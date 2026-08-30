@@ -4,10 +4,10 @@ ROOT=Path(__file__).resolve().parents[1]
 
 def test_versions_and_assets():
     cfg=yaml.safe_load((ROOT/'laufapp/config.yaml').read_text())
-    assert cfg['version']=='0.2.7'
-    assert 'APP_VERSION = "0.2.7"' in (ROOT/'laufapp/app/main_v027.py').read_text()
-    assert 'ARG BUILD_VERSION=0.2.7' in (ROOT/'laufapp/Dockerfile').read_text()
-    assert 'main_v027:app' in (ROOT/'laufapp/run.sh').read_text()
+    assert cfg['version']=='0.2.8'
+    assert 'APP_VERSION = "0.2.8"' in (ROOT/'laufapp/app/main_v028.py').read_text()
+    assert 'ARG BUILD_VERSION=0.2.8' in (ROOT/'laufapp/Dockerfile').read_text()
+    assert 'main_v028:app' in (ROOT/'laufapp/run.sh').read_text()
     static=ROOT/'laufapp/app/static'
     for name in ['index.html','styles.css','bugfix.css','app.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','assets/bugfix.css','assets/v020.js','assets/v020.css','assets/v020_science.js','assets/v020_science.css','assets/v023_aggressiveness.js','assets/v025.js','assets/v025.css']:assert (static/name).exists()
     m=json.loads((static/'manifest.webmanifest').read_text());assert m['display']=='standalone'
@@ -45,8 +45,13 @@ def test_ha_app_config_and_health_auto_export_gateway():
     assert 'health_auto_export_gateway:app' in run and '--port 8100' in run
     assert '--no-proxy-headers' in run and '--no-server-header' in run
     assert '--forwarded-allow-ips' not in run
+    assert 'LAUFAPP_SHUTDOWN signal=' in run
+    assert 'LAUFAPP_CHILD_EXIT child=' in run
+    assert 'wait -n -p EXITED_PID' in run
+    subprocess.run(['bash','-n',str(ROOT/'laufapp/run.sh')],check=True)
     gateway=(ROOT/'laufapp/app/health_auto_export_gateway.py').read_text()
     assert '@app.post("/health-auto-export")' in gateway
+    assert 'from main_v028 import APP_VERSION' in gateway
     assert 'openapi_url=None' in gateway and 'Cache-Control' in gateway
     hae=(ROOT/'laufapp/app/health_auto_export_v027.py').read_text()
     assert 'MIN_TOKEN_LENGTH = 48' in hae and 'previous.authorized' in hae
@@ -56,6 +61,14 @@ def test_ha_app_config_and_health_auto_export_gateway():
     assert 'request.stream()' in runtime
     assert 'Content-Type application/json erforderlich' in runtime
     assert '"predictions"' not in runtime.split('return {"ok": True, **result}',1)[0][-500:]
+    diag=(ROOT/'laufapp/app/main_v028.py').read_text()
+    assert '_HealthcheckAccessFilter' in diag
+    assert '{"/api/health", "/health"}' in diag
+    assert '/api/apple-health/import-jobs/{job_id}/diagnostics' in diag
+    imports=(ROOT/'laufapp/app/import_jobs.py').read_text()
+    assert '.diagnostics.jsonl' in imports
+    assert 'traceback.format_exc()' in imports
+    assert 'resumed_after_restart' in imports
     assert not (ROOT/'laufapp/app/main_v030.py').exists()
     assert not (ROOT/'laufapp/app/ios_healthkit_sync.py').exists()
 
