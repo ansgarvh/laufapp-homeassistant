@@ -37,24 +37,21 @@ process_health_auto_export_request = previous.process_health_auto_export_request
 
 
 class _HealthcheckAccessFilter(logging.Filter):
-    """Drop only high-frequency health-poll request lines from Uvicorn access logs.
-
-    The filter deliberately leaves application errors and every non-health API
-    request untouched. Uvicorn supplies the request path as the third formatting
-    argument; the message fallback keeps the behavior robust across minor Uvicorn
-    logging-format changes.
-    """
+    """Drop only successful high-frequency health-poll Uvicorn access lines."""
 
     _paths = {"/api/health", "/health"}
 
     def filter(self, record: logging.LogRecord) -> bool:
         args = record.args
-        if isinstance(args, tuple) and len(args) >= 3:
+        if isinstance(args, tuple) and len(args) >= 5:
             path = str(args[2]).split("?", 1)[0]
-            if path in self._paths:
+            try:
+                status = int(args[4])
+            except (TypeError, ValueError):
+                status = 500
+            if path in self._paths and status < 400:
                 return False
-        message = record.getMessage()
-        return not any(f" {path} " in message for path in self._paths)
+        return True
 
 
 _access_logger = logging.getLogger("uvicorn.access")
