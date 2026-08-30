@@ -56,7 +56,7 @@
 - Klassischer Apple-Health-ZIP/XML-Pfad gehärtet: ZIP-Bomb-/Dateianzahl-/GPX-Größen-/Punktlimits, GPS-Plausibilisierung und `defusedxml` gegen XML-Entity-Expansion/externe XML-Referenzen.
 - Dependency-Audit identifizierte bekannte Sicherheitslücken in der zuvor verwendeten Starlette-Version 0.50.0. Runtime-Stack auf FastAPI 0.141.1 / Starlette 1.6.0 aktualisiert; direkte Runtime-Abhängigkeiten gepinnt und `pip-audit` als Release-Gate ergänzt.
 - Bandit-Security-Scan mit review-bewusstem Gate ergänzt; neue Medium/High-Findings blockieren die CI. GitHub Actions sind auf konkrete Commit-SHAs gepinnt und besitzen nur `contents: read`.
-- Dynamische Frontend-Renderpfade auf Stored/Reflected XSS geprüft; im geprüften Pfad keine offene XSS-Lücke gefunden.
+- Dynamische Frontend-Renderpfade auf Stored/Reflected XSS geprüft; im geprüften Pfad keine offene Stored-XSS-Lücke gefunden.
 - Keine Datenbankschemamigration und keine fachliche Änderung der Trainingslogik.
 - Statisch/isoliert und in Linux/Docker getestet; reale Home-Assistant-/Supervisor-/VPN-/Health-Auto-Export-iPhone-Integration muss lokal verifiziert werden.
 
@@ -183,9 +183,9 @@
 - Apple-Health-Workouts werden zusätzlich aus nativen `WorkoutStatistics` (Distanz, Dauer, Energie) gelesen; Endzeit dient konservativ als Dauer-Fallback.
 - Persistente Importergebnisse enthalten aggregierte Lauf-, Metrik-, Sample-, Routen- und Ablehnungsdiagnosen sowie Success/Warning-Klassifikation.
 - Health-Ergebnisansicht unterscheidet „0 neu“ von „0 gefunden“ und zeigt v0.1.4-Legacyfelder weiterhin.
-- Wochenwechsel per Swipe, race-sicheres Rendering und Pointer-Drag am Griff; freie Tage verschieben, belegter geplanter Tag atomaren Tausch. „Verschieben“ bleibt als zugänglicher Fallback erhalten; abgeschlossene/ausgefallene Einheiten sind geschützt.
-- Fortschritt: Wochenkilometer für Monat, 3, 6 oder 12 Monate aus der vollständigen relevanten Laufhistorie statt nur den letzten 100 Läufen; Standard ist 3 Monate.
-- Bottom-Navigation: Symbole und Beschriftungen sind rund 18 % größer.
+- Wochenwechsel per Swipe, race-sicheres Rendering und Pointer-Drag am Griff; freie Tage verschieben, belegte geplante Tage tauschen atomar.
+- Wochenkilometer-API und Auswahl für 1/3/6/12 Monate ohne 100-Läufe-Limit.
+- Bottom-Navigation um rund 18 % vergrößert.
 - Keine Schemaänderung; persistente SQLite-Daten und Ingress-Schutz bleiben unverändert.
 
 ## v0.1.4 – 2026-08-28
