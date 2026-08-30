@@ -1,5 +1,5 @@
 from __future__ import annotations
-import calendar, ipaddress, json, os, tempfile, uuid
+import calendar, json, os, tempfile, uuid
 from contextlib import asynccontextmanager
 from datetime import date, timedelta
 from pathlib import Path
@@ -32,18 +32,13 @@ async def lifespan(_app:FastAPI):
 
 app=FastAPI(title='Laufapp',version=APP_VERSION,docs_url=None,redoc_url=None,lifespan=lifespan)
 
-_HOME_ASSISTANT_INTERNAL_NETWORK=ipaddress.ip_network('172.30.32.0/23')
-
 def _trusted_ingress_request(request: Request) -> bool:
-    """Recognize authenticated Ingress only from Home Assistant's internal net."""
-    host=request.client.host if request.client else ''
-    try: peer=ipaddress.ip_address(host)
-    except ValueError:return False
-    if peer not in _HOME_ASSISTANT_INTERNAL_NETWORK:return False
+    # Home Assistant Core injects these headers for authenticated Ingress requests.
+    # Do not rely on request.client here: Uvicorn may replace it with the original
+    # remote IP from X-Forwarded-For when proxy headers are enabled.
     source=request.headers.get('x-hass-source','')
     ingress_path=request.headers.get('x-ingress-path','')
-    remote_user=request.headers.get('x-remote-user-id','')
-    return ingress_path.startswith('/api/hassio_ingress/') and (source=='core.ingress' or bool(remote_user))
+    return source=='core.ingress' and ingress_path.startswith('/api/hassio_ingress/')
 
 @app.middleware('http')
 async def ingress_only(request:Request, call_next):
@@ -153,149 +148,283 @@ def api_bootstrap():
     with db_conn() as c:return bootstrap(c)
 @app.post('/api/setup')
 def api_setup(p:SetupPayload):
+    if p.race_date<=date.today():raise HTTPException(400,'Das Wettkampfdatum muss in der Zukunft liegen.')
     with db_conn() as c:
-        if p.race_date<=date.today():raise HTTPException(400,'Das Wettkampfdatum muss in der Zukunft liegen.')
-        c.execute("UPDATE races SET active=0")
-        cur=c.execute("INSERT INTO races(name,distance_km,race_date,goal_seconds,active) VALUES(?,?,?,?,1)",(p.race_name,p.distance_km,p.race_date.isoformat(),p.goal_seconds))
-        set_setting(c,'training_days',p.training_days);set_setting(c,'setup_completed',True);set_setting(c,'active_race_id',cur.lastrowid);set_setting(c,'plan_stale',False);set_setting(c,'plan_stale_reason','');refresh_plan(c,14)
-    return {'ok':True}
-@app.get('/api/settings')
-def api_settings():
-    with db_conn() as c:return settings_dict(c)
-@app.put('/api/settings')
-def api_settings_update(p:SettingsPayload):
+        c.execute("UPDATE races SET active=0");cur=c.execute("INSERT INTO races(name,distance_km,race_date,goal_seconds,target_source,active) VALUES(?,?,?,?, 'user',1)",(p.race_name,p.distance_km,p.race_date.isoformat(),p.goal_seconds));set_setting(c,'training_days',p.training_days);set_setting(c,'setup_completed',True);generate_week(c,week_start_for(date.today()),True);return {'ok':True,'race_id':int(cur.lastrowid),'bootstrap':bootstrap(c)}
+@app.get('/api/dashboard')
+def api_dashboard():
     with db_conn() as c:
-        before=settings_dict(c)
-        raw=p.model_dump(exclude_unset=True)
-        if raw.get('max_weekly_km_mode')=='auto':raw['max_weekly_km']=None
-        for k,v in raw.items():set_setting(c,k,v)
-        after=settings_dict(c)
-        planning={'training_days','quality_sessions_per_week','max_weekly_km_mode','max_weekly_km','training_volume_profile','training_difficulty','baseline_weekly_km','max_long_run_km','max_long_run_share'}
-        changed=[k for k in planning if before.get(k)!=after.get(k)]
-        if changed:mark_plan_stale(c,'Planungseinstellungen geändert: '+', '.join(changed))
-        after['changed_planning_fields']=changed
-        return after
+        d=dashboard(c);d['health']=health_summary(c);d['ai']=config_status(c);return d
+@app.get('/api/week')
+def api_week(start:date|None=Query(default=None)):
+    with db_conn() as c:return week_summary(c,week_start_for(start or date.today()))
+@app.get('/api/progress/volume')
+def api_progress_volume(period:Literal['1m','3m','6m','12m','this_year','last_year']='3m'):
+    with db_conn() as c:return progress_volume(c,period)
+@app.post('/api/plan/generate')
+def api_plan(start:date|None=Query(default=None),force:bool=False):
+    with db_conn() as c:
+        if not current_race(c):raise HTTPException(400,'Lege zuerst einen aktiven Wettkampf an.')
+        return {'workouts':generate_week(c,week_start_for(start or date.today()),force)}
+@app.post('/api/plan/refresh')
+def api_plan_refresh(start:str|None=Query(default=None),weeks:int=Query(default=4,ge=1,le=12)):
+    parsed_start=None
+    if start and start.lower() not in {'null','undefined'}:
+        try:parsed_start=date.fromisoformat(start)
+        except ValueError as e:raise HTTPException(400,'Ungültiges Startdatum für die Planneuberechnung.') from e
+    with db_conn() as c:
+        if not current_race(c):raise HTTPException(400,'Lege zuerst einen aktiven Wettkampf an.')
+        return refresh_plan(c,parsed_start,weeks)
+
+@app.get('/api/plan/review')
+def api_review_get(start:date|None=Query(default=None)):
+    ws=week_start_for(start or date.today())
+    with db_conn() as c:return {'week_start':ws.isoformat(),'review':get_plan_review(c,ws)}
+@app.post('/api/plan/review')
+def api_review_post(start:date|None=Query(default=None),force:bool=False):
+    with db_conn() as c:
+        try:return review_week_plan(c,week_start_for(start or date.today()),force)
+        except RuntimeError as e:raise HTTPException(400,str(e)) from e
+@app.post('/api/workouts/{wid}/move')
+def api_move(wid:int,p:MovePayload):
+    with db_conn() as c:
+        try:return move_workout(c,wid,p.scheduled_date)
+        except KeyError as e:raise HTTPException(404,str(e)) from e
+        except ValueError as e:raise HTTPException(400,str(e)) from e
+@app.post('/api/workouts/{wid}/status')
+def api_status(wid:int,p:StatusPayload):
+    with db_conn() as c:
+        if not c.execute("SELECT id FROM workouts WHERE id=?",(wid,)).fetchone():raise HTTPException(404,'Training nicht gefunden.')
+        c.execute("UPDATE workouts SET status=?,manual_override=1,modified_by='user' WHERE id=?",(p.status,wid));return {'ok':True}
 @app.get('/api/races')
 def api_races():
     with db_conn() as c:return rows(c.execute("SELECT * FROM races ORDER BY active DESC,race_date").fetchall())
+@app.post('/api/races')
+def api_race_add(p:RacePayload):
+    if p.race_date<=date.today():raise HTTPException(400,'Das Wettkampfdatum muss in der Zukunft liegen.')
+    with db_conn() as c:
+        if p.active:c.execute("UPDATE races SET active=0")
+        cur=c.execute("INSERT INTO races(name,distance_km,race_date,goal_seconds,target_source,active) VALUES(?,?,?,?, 'user',?)",(p.name,p.distance_km,p.race_date.isoformat(),p.goal_seconds,int(p.active)))
+        if p.active:mark_plan_stale(c,'Aktiver Wettkampf geändert')
+        return {'id':int(cur.lastrowid)}
+@app.post('/api/races/{rid}/adopt-prediction')
+def api_adopt(rid:int):
+    with db_conn() as c:
+        r=c.execute("SELECT * FROM races WHERE id=?",(rid,)).fetchone()
+        if not r:raise HTTPException(404,'Wettkampf nicht gefunden.')
+        p=predict_distance(c,float(r['distance_km']))
+        if not p:raise HTTPException(400,'Noch keine belastbare Prognose vorhanden.')
+        c.execute("UPDATE races SET goal_seconds=?,target_source='prediction' WHERE id=?",(p['predicted_seconds'],rid));mark_plan_stale(c,'Zielzeit oder Prognose geändert');return {'ok':True,'goal_seconds':p['predicted_seconds'],'goal_time':p['predicted_time']}
+@app.get('/api/predictions')
+def api_predictions():
+    with db_conn() as c:
+        r=current_race(c);return {'predictions':predict_all(c),'assessment':goal_assessment(c,r) if r else None,'history':rows(c.execute("SELECT * FROM prediction_history ORDER BY created_at DESC LIMIT 120").fetchall())}
+@app.post('/api/performance-marks')
+def api_mark(p:MarkPayload):
+    if p.mark_date>date.today():raise HTTPException(400,'Leistungsdatum darf nicht in der Zukunft liegen.')
+    with db_conn() as c:
+        cur=c.execute("INSERT INTO performance_marks(distance_km,duration_s,mark_date,source,label) VALUES(?,?,?,?,?)",(p.distance_km,p.duration_s,p.mark_date.isoformat(),p.source,p.label));snapshot(c,'performance_mark');return {'id':int(cur.lastrowid),'predictions':predict_all(c)}
+@app.get('/api/performance-marks')
+def api_marks():
+    with db_conn() as c:return rows(c.execute("SELECT * FROM performance_marks ORDER BY mark_date DESC").fetchall())
 @app.get('/api/shoes')
 def api_shoes():
     with db_conn() as c:return shoe_rows(c)
 @app.post('/api/shoes')
-def api_shoes_add(p:ShoePayload):
-    with db_conn() as c:cur=c.execute("INSERT INTO shoes(brand,model,nickname,start_km) VALUES(?,?,?,?)",(p.brand,p.model,p.nickname,p.start_km));return {'id':cur.lastrowid}
-@app.delete('/api/shoes/{shoe_id}')
-def api_shoes_delete(shoe_id:int):
-    with db_conn() as c:c.execute("UPDATE shoes SET archived=1 WHERE id=?",(shoe_id,));return {'ok':True}
+def api_shoe_add(p:ShoePayload):
+    with db_conn() as c:
+        cur=c.execute("INSERT INTO shoes(brand,model,nickname,start_km) VALUES(?,?,?,?)",(p.brand,p.model,p.nickname,p.start_km));return {'id':int(cur.lastrowid)}
+@app.post('/api/shoes/{sid}/archive')
+def api_shoe_archive(sid:int):
+    with db_conn() as c:c.execute("UPDATE shoes SET archived=1 WHERE id=?",(sid,));return {'ok':True}
 @app.get('/api/runs')
 def api_runs(limit:int=Query(default=100,ge=1,le=1000)):
-    with db_conn() as c:return rows(c.execute("SELECT * FROM runs ORDER BY started_at DESC LIMIT ?",(limit,)).fetchall())
+    with db_conn() as c:return rows(c.execute("SELECT r.*,s.brand shoe_brand,s.model shoe_model FROM runs r LEFT JOIN shoes s ON s.id=r.shoe_id ORDER BY r.started_at DESC LIMIT ?",(limit,)).fetchall())
+@app.patch('/api/runs/{rid}')
+def api_run_update(rid:int,p:RunUpdatePayload):
+    with db_conn() as c:
+        r=c.execute("SELECT * FROM runs WHERE id=?",(rid,)).fetchone()
+        if not r:raise HTTPException(404,'Lauf nicht gefunden.')
+        vals=p.model_dump(exclude_unset=True);parts=[];args=[]
+        if 'shoe_id' in vals and vals['shoe_id'] is not None and not c.execute("SELECT id FROM shoes WHERE id=? AND archived=0",(vals['shoe_id'],)).fetchone():raise HTTPException(400,'Schuh nicht gefunden oder archiviert.')
+        for k in ('rpe','shoe_id','notes'):
+            if k in vals:parts.append(f"{k}=?");args.append(vals[k])
+        if parts:c.execute(f"UPDATE runs SET {','.join(parts)} WHERE id=?",(*args,rid))
+        return dict(c.execute("SELECT r.*,s.brand shoe_brand,s.model shoe_model FROM runs r LEFT JOIN shoes s ON s.id=r.shoe_id WHERE r.id=?",(rid,)).fetchone())
 @app.post('/api/runs')
-def api_runs_add(p:RunPayload):
+def api_run_add(p:RunPayload):
     with db_conn() as c:
-        cur=c.execute("INSERT INTO runs(external_id,source,started_at,duration_s,distance_km,avg_hr,elevation_m,calories,rpe,shoe_id,notes) VALUES(NULL,?,?,?,?,?,?,?,?,?,?)",(p.source,p.started_at,p.duration_s,p.distance_km,p.avg_hr,p.elevation_m,p.calories,p.rpe,p.shoe_id,p.notes));auto_match_run(c,cur.lastrowid);snapshot(c,'manual');return {'id':cur.lastrowid}
-@app.put('/api/runs/{run_id}')
-def api_runs_update(run_id:int,p:RunUpdatePayload):
-    with db_conn() as c:
-        if not c.execute("SELECT 1 FROM runs WHERE id=?",(run_id,)).fetchone():raise HTTPException(404,'Lauf nicht gefunden.')
-        values=p.model_dump(exclude_unset=True)
-        if not values:return {'ok':True}
-        fields=[];args=[]
-        for key in ('rpe','shoe_id','notes'):
-            if key in values:fields.append(f"{key}=?");args.append(values[key])
-        args.append(run_id);c.execute(f"UPDATE runs SET {','.join(fields)} WHERE id=?",args);return {'ok':True}
-@app.post('/api/marks')
-def api_mark(p:MarkPayload):
-    with db_conn() as c:cur=c.execute("INSERT INTO performance_marks(distance_km,duration_s,mark_date,source,label) VALUES(?,?,?,?,?)",(p.distance_km,p.duration_s,p.mark_date.isoformat(),p.source,p.label));return {'id':cur.lastrowid}
-@app.delete('/api/marks/{mark_id}')
-def api_mark_delete(mark_id:int):
-    with db_conn() as c:c.execute("DELETE FROM performance_marks WHERE id=?",(mark_id,));return {'ok':True}
-@app.get('/api/week')
-def api_week(start:date|None=None):
-    with db_conn() as c:return week_summary(c,start or week_start_for(date.today()))
-@app.post('/api/week/refresh')
-def api_week_refresh(start:date|None=None,force:bool=False):
-    with db_conn() as c:
-        if force:return refresh_plan(c,14,start or week_start_for(date.today()))
-        return generate_week(c,start or week_start_for(date.today()))
-@app.patch('/api/workouts/{workout_id}/move')
-def api_move(workout_id:int,p:MovePayload):
-    with db_conn() as c:return move_workout(c,workout_id,p.scheduled_date)
-@app.patch('/api/workouts/{workout_id}/status')
-def api_status(workout_id:int,p:StatusPayload):
-    with db_conn() as c:c.execute("UPDATE workouts SET status=?,modified=1 WHERE id=?",(p.status,workout_id));return {'ok':True}
-@app.get('/api/progress')
-def api_progress():
-    with db_conn() as c:return {'predictions':predict_all(c),'health':health_summary(c),'marks':rows(c.execute("SELECT * FROM performance_marks ORDER BY mark_date DESC").fetchall())}
-@app.get('/api/progress/volume')
-def api_progress_volume(period:Literal['1m','3m','6m','12m','this_year','last_year']='3m'):
-    with db_conn() as c:return progress_volume(c,period)
-@app.get('/api/dashboard')
-def api_dashboard():
-    with db_conn() as c:return dashboard(c)
-@app.get('/api/run-analysis/{run_id}')
-def api_run_analysis(run_id:int):
-    with db_conn() as c:
-        try:return analyze_run(c,run_id)
-        except ValueError as e:raise HTTPException(404,str(e))
-@app.get('/api/plan-review')
-def api_plan_review():
-    with db_conn() as c:return get_plan_review(c)
-@app.post('/api/coach/chat')
-def api_coach_chat(p:CoachPayload):
-    with db_conn() as c:
-        try:return coach_chat(c,p.message)
-        except (ValueError,RuntimeError) as e:raise HTTPException(400,str(e))
-@app.post('/api/coach/review-week')
-def api_coach_review():
-    with db_conn() as c:
-        try:return review_week_plan(c)
-        except (ValueError,RuntimeError) as e:raise HTTPException(400,str(e))
-@app.post('/api/coach/extract-image')
-async def api_extract(file:UploadFile=File(...)):
-    tmp=Path(tempfile.mkstemp(prefix='run-',suffix=Path(file.filename or '.png').suffix)[1])
-    try:
-        tmp.write_bytes(await file.read())
-        return extract_run_image(tmp)
-    finally:tmp.unlink(missing_ok=True)
+        cur=c.execute("INSERT INTO runs(started_at,distance_km,duration_s,avg_hr,elevation_m,calories,rpe,shoe_id,notes,source) VALUES(?,?,?,?,?,?,?,?,?,?)",(p.started_at,p.distance_km,p.duration_s,p.avg_hr,p.elevation_m,p.calories,p.rpe,p.shoe_id,p.notes,p.source));rid=int(cur.lastrowid);wid=auto_match_run(c,rid);snapshot(c,'manual_run');return {'id':rid,'matched_workout_id':wid}
 @app.post('/api/apple-health/import-jobs',status_code=202)
-async def api_health_job(file:UploadFile=File(...),replace_existing:bool=False):
-    suffix=Path(file.filename or '').suffix.lower()
-    if suffix not in {'.zip','.xml'}:raise HTTPException(400,'Bitte Apple-Health-ZIP oder export.xml hochladen.')
-    jid=str(uuid.uuid4());temp=import_storage_path(jid,suffix);size=0
+async def api_health_import_job(file:UploadFile=File(...), replace_existing:bool=False):
+    filename=file.filename or 'apple-health-export.zip'
+    lower=filename.lower()
+    if not (lower.endswith('.zip') or lower.endswith('.xml')):raise HTTPException(400,'Bitte eine ZIP-Datei oder export.xml auswählen.')
+    suffix='.zip' if lower.endswith('.zip') else '.xml'
+    job_uuid=str(uuid.uuid4())
+    target_path=import_storage_path(job_uuid,suffix)
+    size=0
     try:
-        with temp.open('wb') as out:
-            while True:
-                chunk=await file.read(4*1024*1024)
-                if not chunk:break
+        with target_path.open('wb') as target:
+            while chunk:=await file.read(1024*1024):
                 size+=len(chunk)
-                if size>MAX_HEALTH_UPLOAD:raise HTTPException(413,'Apple-Health-Export ist größer als 2 GB.')
-                out.write(chunk)
+                if size>MAX_HEALTH_UPLOAD:
+                    raise HTTPException(413,'Der Health-Export ist größer als 2 GB.')
+                target.write(chunk)
+        job=create_import_job_with_uuid(job_uuid,filename,target_path,size,replace_existing)
+        MANAGER.submit(int(job['id']))
+        return job
     except Exception:
-        temp.unlink(missing_ok=True);raise
-    job=create_import_job_with_uuid(jid,file.filename or 'apple-health-export'+suffix,temp,size,replace_existing)
-    MANAGER.submit(job['id']);return job
+        target_path.unlink(missing_ok=True)
+        raise
+    finally:
+        await file.close()
+
 @app.get('/api/apple-health/import-jobs/latest')
-def api_health_latest():return latest_job() or {}
+def api_health_import_latest():
+    return latest_job() or {}
+
 @app.get('/api/apple-health/import-jobs')
-def api_health_jobs():return list_jobs()
+def api_health_import_jobs(limit:int=Query(default=10,ge=1,le=100)):
+    return list_jobs(limit)
+
 @app.get('/api/apple-health/import-jobs/{job_id}')
-def api_health_job_status(job_id:int):
+def api_health_import_job_status(job_id:int):
     job=get_job(job_id)
     if not job:raise HTTPException(404,'Import nicht gefunden.')
     return job
+
 @app.post('/api/apple-health/import-jobs/{job_id}/retry')
-def api_health_retry(job_id:int):
+def api_health_import_retry(job_id:int):
     try:return retry_job(job_id)
-    except KeyError as e:raise HTTPException(404,str(e))
-    except ValueError as e:raise HTTPException(409,str(e))
-@app.get('/api/transfer/status')
-def api_transfer_status():return {'data_dir':str(data_dir()),'ready':True}
-@app.post('/api/transfer/export')
-def api_transfer_export():return prepare_repository_transfer()
+    except KeyError as e:raise HTTPException(404,str(e)) from e
+    except ValueError as e:raise HTTPException(400,str(e)) from e
+
+# Compatibility endpoint for older clients/tests. The UI uses the background-job
+# endpoint above, so closing/minimising the browser after upload no longer stops
+# processing.
+@app.post('/api/apple-health/import')
+async def api_health_import(file:UploadFile=File(...)):
+    suffix='.zip' if (file.filename or '').lower().endswith('.zip') else '.xml';tmp=data_dir()/'tmp'/f'import-{next(tempfile._get_candidate_names())}{suffix}';size=0
+    try:
+        with tmp.open('wb') as target:
+            while chunk:=await file.read(1024*1024):
+                size+=len(chunk)
+                if size>MAX_HEALTH_UPLOAD:raise HTTPException(413,'Der Health-Export ist größer als 2 GB.')
+                target.write(chunk)
+        with db_conn() as c:
+            try:r=import_apple_health(c,tmp,24)
+            except ValueError as e:raise HTTPException(400,str(e)) from e
+            snapshot(c,'apple_health_import');
+            if r.get('runs_added',0):mark_plan_stale(c,'Neue Apple-Health-Läufe verfügbar')
+            r['health_summary']=health_summary(c);r['predictions']=predict_all(c);return r
+    finally:await file.close();tmp.unlink(missing_ok=True)
+
+@app.get('/api/runs/{rid}/details')
+def api_run_details(rid:int):
+    with db_conn() as c:
+        run=c.execute("SELECT * FROM runs WHERE id=?",(rid,)).fetchone()
+        if not run:raise HTTPException(404,'Lauf nicht gefunden.')
+        samples=rows(c.execute("SELECT metric_type,COUNT(*) samples,ROUND(AVG(value),3) average,ROUND(MIN(value),3) minimum,ROUND(MAX(value),3) maximum,MAX(unit) unit FROM run_samples WHERE run_id=? GROUP BY metric_type ORDER BY metric_type",(rid,)).fetchall())
+        gps=c.execute("SELECT COUNT(*) n FROM gps_points WHERE run_id=?",(rid,)).fetchone()['n']
+        return {'run':dict(run),'sample_summary':samples,'gps_points':int(gps)}
+@app.get('/api/suggestions')
+def api_suggestions(status:str='pending'):
+    if status not in {'pending','accepted','rejected','all'}:raise HTTPException(400,'Ungültiger Status.')
+    with db_conn() as c:
+        rr=c.execute("SELECT * FROM suggestions ORDER BY id DESC LIMIT 100").fetchall() if status=='all' else c.execute("SELECT * FROM suggestions WHERE status=? ORDER BY id DESC LIMIT 100",(status,)).fetchall();out=[]
+        for r in rr:
+            d=dict(r)
+            try:d['payload']=json.loads(d.pop('payload_json'))
+            except:d['payload']={}
+            out.append(d)
+        return out
+@app.post('/api/suggestions/{sid}/accept')
+def api_suggestion_accept(sid:int):
+    with db_conn() as c:
+        r=c.execute("SELECT * FROM suggestions WHERE id=? AND status='pending'",(sid,)).fetchone()
+        if not r:raise HTTPException(404,'Offener Vorschlag nicht gefunden.')
+        try:p=json.loads(r['payload_json'])
+        except:raise HTTPException(400,'Vorschlag ist beschädigt.')
+        if p.get('action')!='update_workout':raise HTTPException(400,'Unbekannter Vorschlagstyp.')
+        wid=int(p.get('workout_id',0));w=c.execute("SELECT * FROM workouts WHERE id=? AND status='planned'",(wid,)).fetchone()
+        if not w:raise HTTPException(400,'Das betroffene Training ist nicht mehr offen.')
+        changes=p.get('changes') or {};warnings=[]
+        if 'distance_km' in changes:
+            proposed=float(changes['distance_km']);cur=float(w['distance_km'])
+            if not max(3,cur*.5)<=proposed<=cur*1.1:raise HTTPException(400,'Distanzänderung verletzt die Sicherheitsgrenzen.')
+            c.execute("UPDATE workouts SET distance_km=?,manual_override=1,modified_by='coach' WHERE id=?",(round(proposed,1),wid))
+        if 'scheduled_date' in changes:
+            try:warnings+=move_workout(c,wid,date.fromisoformat(changes['scheduled_date']))['warnings']
+            except (KeyError,ValueError) as e:raise HTTPException(400,str(e)) from e
+        c.execute("UPDATE suggestions SET status='accepted',resolved_at=CURRENT_TIMESTAMP WHERE id=?",(sid,));return {'ok':True,'warnings':warnings}
+@app.post('/api/suggestions/{sid}/reject')
+def api_suggestion_reject(sid:int):
+    with db_conn() as c:
+        if not c.execute("UPDATE suggestions SET status='rejected',resolved_at=CURRENT_TIMESTAMP WHERE id=? AND status='pending'",(sid,)).rowcount:raise HTTPException(404,'Offener Vorschlag nicht gefunden.')
+        return {'ok':True}
+@app.get('/api/coach/history')
+def api_chat_history(limit:int=40):
+    with db_conn() as c:
+        out=[]
+        for r in reversed(c.execute("SELECT * FROM chat_messages ORDER BY id DESC LIMIT ?",(limit,)).fetchall()):
+            d=dict(r)
+            try:d['meta']=json.loads(d.pop('meta_json'))
+            except:d['meta']={}
+            out.append(d)
+        return out
+@app.post('/api/coach/chat')
+def api_chat(p:CoachPayload):
+    with db_conn() as c:
+        try:return coach_chat(c,p.message)
+        except RuntimeError as e:raise HTTPException(400,str(e)) from e
+@app.post('/api/coach/extract-run')
+async def api_extract(file:UploadFile=File(...)):
+    mime=file.content_type or 'image/jpeg'
+    if not mime.startswith('image/'):raise HTTPException(400,'Bitte einen Bild-Screenshot auswählen.')
+    raw=await file.read(12*1024*1024+1);await file.close()
+    with db_conn() as c:
+        try:return extract_run_image(c,raw,mime)
+        except RuntimeError as e:raise HTTPException(400,str(e)) from e
+@app.post('/api/coach/analyze-run/{rid}')
+def api_analyze(rid:int):
+    with db_conn() as c:
+        try:return analyze_run(c,rid)
+        except KeyError as e:raise HTTPException(404,str(e)) from e
+        except RuntimeError as e:raise HTTPException(400,str(e)) from e
+@app.get('/api/settings')
+def api_settings():
+    with db_conn() as c:return settings_dict(c)
+@app.patch('/api/settings')
+def api_settings_patch(p:SettingsPayload):
+    with db_conn() as c:
+        vals=p.model_dump(exclude_none=True)
+        days=vals.get('training_days',get_setting(c,'training_days',[1,3,4,6]));quality=vals.get('quality_sessions_per_week',get_setting(c,'quality_sessions_per_week',2))
+        if quality>len(days)-2:raise HTTPException(422,'Mindestens zwei Lauftage müssen locker beziehungsweise für den Longrun bleiben.')
+        for k,v in vals.items():set_setting(c,k,v)
+        plan_keys={'training_days','quality_sessions_per_week','max_weekly_km_mode','max_weekly_km','training_volume_profile','training_difficulty','baseline_weekly_km','max_long_run_km','max_long_run_share'}
+        if plan_keys.intersection(vals) and current_race(c):mark_plan_stale(c,'Deine Planungseinstellungen wurden geändert.')
+        return settings_dict(c)
+@app.get('/api/ai-usage')
+def api_usage():
+    with db_conn() as c:return {'month_cost_eur':round(month_cost(c),4),'items':rows(c.execute("SELECT substr(created_at,1,7) month,usage_kind,ROUND(SUM(estimated_cost_eur),4) cost_eur,SUM(input_tokens) input_tokens,SUM(output_tokens) output_tokens,SUM(web_searches) web_searches FROM ai_usage GROUP BY month,usage_kind ORDER BY month DESC").fetchall())}
+
+@app.post('/api/system/prepare-repository-transfer')
+def api_prepare_repository_transfer():
+    try:return {'ok':True,'transfer':prepare_repository_transfer()}
+    except (FileNotFoundError,RuntimeError,OSError) as e:raise HTTPException(500,str(e)) from e
+
+@app.get('/manifest.webmanifest')
+def manifest():return FileResponse(STATIC/'manifest.webmanifest',media_type='application/manifest+json',headers={'Cache-Control':'no-cache'})
+@app.get('/sw.js')
+def sw():return FileResponse(STATIC/'sw.js',media_type='application/javascript',headers={'Cache-Control':'no-cache'})
+@app.get('/apple-touch-icon.png')
+def touch():return FileResponse(STATIC/'icon-192.png',media_type='image/png')
 app.mount('/assets',StaticFiles(directory=STATIC),name='assets')
-@app.get('/{rest:path}',include_in_schema=False)
-def pwa(rest:str):
-    path=STATIC/rest
-    if rest and path.is_file():return FileResponse(path,headers={'Cache-Control':'no-store, max-age=0'})
-    return FileResponse(STATIC/'index.html',headers={'Cache-Control':'no-store, max-age=0'})
+@app.get('/')
+def root():return FileResponse(STATIC/'index.html',headers={'Cache-Control':'no-cache'})
+# Convenience routes for relative asset URLs used by Home Assistant Ingress.
+@app.get('/styles.css')
+def css():return FileResponse(STATIC/'styles.css',media_type='text/css')
+@app.get('/app.js')
+def js():return FileResponse(STATIC/'app.js',media_type='application/javascript')
