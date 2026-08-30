@@ -4,14 +4,14 @@ ROOT=Path(__file__).resolve().parents[1]
 
 def test_versions_and_assets():
     cfg=yaml.safe_load((ROOT/'laufapp/config.yaml').read_text())
-    assert cfg['version']=='0.2.10'
-    assert 'APP_VERSION = "0.2.10"' in (ROOT/'laufapp/app/main_v0210.py').read_text()
-    assert 'ARG BUILD_VERSION=0.2.10' in (ROOT/'laufapp/Dockerfile').read_text()
-    assert 'main_v0210:app' in (ROOT/'laufapp/run.sh').read_text()
-    assert '# Laufapp v0.2.10' in (ROOT/'README.md').read_text()
-    assert '## v0.2.10 – 2026-08-30' in (ROOT/'CHANGELOG.md').read_text()
-    assert (ROOT/'RELEASE_NOTES_v0.2.10.md').exists()
-    assert 'Laufapp v0.2.10' in (ROOT/'RELEASE_NOTES_v0.2.10.md').read_text()
+    assert cfg['version']=='0.2.11'
+    assert 'APP_VERSION = "0.2.11"' in (ROOT/'laufapp/app/main_v0211.py').read_text()
+    assert 'ARG BUILD_VERSION=0.2.11' in (ROOT/'laufapp/Dockerfile').read_text()
+    assert 'main_v0211:app' in (ROOT/'laufapp/run.sh').read_text()
+    assert '# Laufapp v0.2.11' in (ROOT/'README.md').read_text()
+    assert '## v0.2.11 – 2026-08-30' in (ROOT/'CHANGELOG.md').read_text()
+    assert (ROOT/'RELEASE_NOTES_v0.2.11.md').exists()
+    assert 'Laufapp v0.2.11' in (ROOT/'RELEASE_NOTES_v0.2.11.md').read_text()
     static=ROOT/'laufapp/app/static'
     for name in ['index.html','styles.css','bugfix.css','app.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','assets/bugfix.css','assets/v020.js','assets/v020.css','assets/v020_science.js','assets/v020_science.css','assets/v023_aggressiveness.js','assets/v025.js','assets/v025.css']:assert (static/name).exists()
     m=json.loads((static/'manifest.webmanifest').read_text());assert m['display']=='standalone'
@@ -44,7 +44,7 @@ def test_ha_app_config_and_health_auto_export_gateway():
     assert cfg['schema']['health_auto_export_token']=='password'
     assert cfg['ports']['8099/tcp'] is None and cfg['ports']['8100/tcp'] is None
     assert 'share:rw' in cfg.get('map',[])
-    assert 'Nabu-Casa-Relay' in cfg['ports_description']['8100/tcp']
+    assert 'Home-Assistant-Relay' in cfg['ports_description']['8100/tcp']
     run=(ROOT/'laufapp/run.sh').read_text()
     assert 'health_auto_export_gateway:app' in run and '--port 8100' in run
     assert '--no-proxy-headers' in run and '--no-server-header' in run
@@ -56,7 +56,7 @@ def test_ha_app_config_and_health_auto_export_gateway():
     gateway=(ROOT/'laufapp/app/health_auto_export_gateway.py').read_text()
     assert '@app.post("/health-auto-export")' in gateway
     assert '@app.post("/home-assistant-relay")' in gateway
-    assert 'from main_v0210 import APP_VERSION' in gateway
+    assert 'from main_v0211 import APP_VERSION' in gateway
     assert 'LAUFAPP_HAE_RELAY_OK transport=nabu_casa' in gateway
     assert 'openapi_url=None' in gateway and 'Cache-Control' in gateway
     hae=(ROOT/'laufapp/app/health_auto_export_v027.py').read_text()
@@ -78,9 +78,37 @@ def test_ha_app_config_and_health_auto_export_gateway():
     assert '.diagnostics.jsonl' in imports
     assert 'traceback.format_exc()' in imports
     assert 'resumed_after_restart' in imports
-    assert (ROOT/'laufapp/app/main_v0210.py').exists()
+    assert (ROOT/'laufapp/app/main_v0211.py').exists()
     assert not (ROOT/'laufapp/app/main_v030.py').exists()
     assert not (ROOT/'laufapp/app/ios_healthkit_sync.py').exists()
+
+
+def test_direct_home_assistant_webhook_relay_is_pinned_and_bounded():
+    component=ROOT/'custom_components/laufapp_hae_relay'
+    assert (component/'__init__.py').exists() and (component/'manifest.json').exists()
+    manifest=json.loads((component/'manifest.json').read_text())
+    assert manifest['domain']=='laufapp_hae_relay'
+    assert manifest['version']=='0.2.11'
+    assert manifest['requirements']==[]
+    assert 'webhook' in manifest['dependencies']
+    source=(component/'__init__.py').read_text()
+    assert 'TARGET_URL = "http://c87ed7df-laufapp:8100/home-assistant-relay"' in source
+    assert 'MAX_BODY_BYTES = 16 * 1024 * 1024' in source
+    assert 'allowed_methods=("POST",)' in source
+    assert 'local_only=False' in source
+    assert 'X-Laufapp-Token' in source
+    assert 'async_get_clientsession' in source
+    assert 'trigger.json' not in source
+    cfg=(ROOT/'home_assistant/laufapp_hae_relay_configuration.yaml.example').read_text()
+    assert 'laufapp_hae_relay:' in cfg
+    assert '!secret laufapp_hae_webhook_id' in cfg
+    assert '!secret laufapp_health_auto_export_token' in cfg
+    legacy=(ROOT/'home_assistant/automation_laufapp_nabu_casa.yaml.example').read_text()
+    assert 'LEGACY / SMALL-PAYLOAD EXAMPLE ONLY' in legacy
+    assert '262144' in legacy
+    docs=(ROOT/'NABU_CASA_HEALTH_SYNC.md').read_text()
+    assert '.ui.nabu.casa/api/webhook/' in docs
+    assert 'Template output exceeded maximum size of 262144 characters' in docs
 
 
 def test_large_uploads_use_home_assistant_ingress_streaming():
@@ -112,7 +140,9 @@ def test_github_repository_layout_and_security_audit():
     assert repo['name']=='Laufapp Home Assistant Repository'
     assert repo['url']=='https://github.com/ansgarvh/laufapp-homeassistant'
     workflow=(ROOT/'.github/workflows/ci.yml').read_text()
-    for required in ['pytest -q','python -m compileall','node --check','docker build','v023_aggressiveness.js','v025.js','health-auto-export','home-assistant-relay','pip-audit','X-Forwarded-For','172.30.32.0/23','X-Remote-User-Id']:
+    for required in ['pytest -q','python -m compileall','custom_components/laufapp_hae_relay','node --check','docker build','v023_aggressiveness.js','v025.js','health-auto-export','home-assistant-relay','pip-audit','X-Forwarded-For','172.30.32.0/23','X-Remote-User-Id']:
         assert required in workflow
+    security=(ROOT/'.github/workflows/security.yml').read_text()
+    assert 'custom_components/laufapp_hae_relay' in security
     assert 'ios-build' not in workflow
     assert 'pip-audit==2.10.1' in (ROOT/'requirements-dev.txt').read_text()
