@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 import health_auto_export_gateway as gateway
+from db import init_db
 
 
 STRONG_TOKEN = "9f4a6c2d8e1b7a305c9d4e6f1a2b8c70d5e3f9a1c6b4d8e2f7a0c3b5d9e1f6a4"
@@ -56,11 +57,16 @@ def _payload():
 
 
 def _configure(monkeypatch, tmp_path):
+    data_dir = tmp_path / "data"
     monkeypatch.setenv("LAUFAPP_TRUSTED_INGRESS_ONLY", "0")
-    monkeypatch.setenv("LAUFAPP_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("LAUFAPP_DATA_DIR", str(data_dir))
     monkeypatch.setenv("LAUFAPP_TRANSFER_DIR", str(tmp_path / "transfer"))
     monkeypatch.setenv("LAUFAPP_OPTIONS_FILE", str(tmp_path / "options.json"))
     monkeypatch.setenv("LAUFAPP_HEALTH_AUTO_EXPORT_TOKEN", STRONG_TOKEN)
+    # Production run.sh starts the main process and waits for its health check
+    # before starting the gateway. That main startup initializes/migrates the DB.
+    # The isolated gateway unit test must explicitly model the same precondition.
+    init_db(data_dir / "laufapp.sqlite3")
 
 
 def test_home_assistant_relay_requires_dedicated_x_token(monkeypatch, tmp_path):
