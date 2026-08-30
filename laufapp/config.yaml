@@ -1,7 +1,7 @@
 name: "Laufapp"
-version: "0.2.6"
+version: "0.2.7"
 slug: "laufapp"
-description: "Privater datenbasierter Laufcoach als PWA mit Apple-Health-Import, Health Auto Export und optionalem OpenAI-Coach."
+description: "Privater datenbasierter Laufcoach als PWA mit Apple-Health-Import, gehärtetem Health Auto Export und optionalem OpenAI-Coach."
 arch:
   - amd64
 startup: application
@@ -17,8 +17,8 @@ ports:
   8099/tcp: null
   8100/tcp: null
 ports_description:
-  8099/tcp: "Optionaler direkter Webzugriff (deaktiviert lassen; Ingress verwenden)"
-  8100/tcp: "Optionaler Health-Auto-Export-Sync-Gateway (nur LAN/VPN, tokenpflichtig)"
+  8099/tcp: "Nicht veröffentlichen; Oberfläche ausschließlich über Home Assistant Ingress"
+  8100/tcp: "Optionaler Health-Auto-Export-Gateway; nur über verschlüsseltes VPN oder HTTPS-Reverse-Proxy veröffentlichen"
 options:
   openai_api_key: ""
   health_auto_export_token: ""
