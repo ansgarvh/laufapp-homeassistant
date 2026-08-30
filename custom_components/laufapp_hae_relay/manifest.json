@@ -1,0 +1,10 @@
+{
+  "domain": "laufapp_hae_relay",
+  "name": "Laufapp Health Auto Export Relay",
+  "codeowners": [],
+  "dependencies": ["webhook"],
+  "documentation": "https://github.com/ansgarvh/laufapp-homeassistant/blob/main/NABU_CASA_HEALTH_SYNC.md",
+  "iot_class": "local_push",
+  "requirements": [],
+  "version": "0.2.11"
+}
