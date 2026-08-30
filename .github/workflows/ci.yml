@@ -47,14 +47,16 @@ jobs:
         run: python tests/randomized_runner_simulator.py
       - name: Docker build
         run: docker build --pull --build-arg BUILD_VERSION=$(python -c "import yaml; print(yaml.safe_load(open('laufapp/config.yaml'))['version'])") --build-arg BUILD_ARCH=amd64 -t laufapp-ci:${{ github.sha }} laufapp
-      - name: Docker runtime, HAE and hostile ingress security E2E
+      - name: Docker runtime, HAE and Home Assistant ingress security E2E
         run: |
           set -euo pipefail
           TOKEN='9f4a6c2d8e1b7a305c9d4e6f1a2b8c70d5e3f9a1c6b4d8e2f7a0c3b5d9e1f6a4'
           cleanup() {
             docker logs laufapp-smoke >/dev/null 2>&1 || true
             docker logs laufapp-security >/dev/null 2>&1 || true
-            docker rm -f laufapp-smoke laufapp-security >/dev/null 2>&1 || true
+            docker logs laufapp-ingress >/dev/null 2>&1 || true
+            docker rm -f laufapp-smoke laufapp-security laufapp-ingress >/dev/null 2>&1 || true
+            docker network rm ha-ingress-test >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
 
@@ -106,9 +108,6 @@ jobs:
 
           docker rm -f laufapp-smoke >/dev/null
 
-          # Production-mode defense in depth: even if someone accidentally maps
-          # port 8099, forged forwarding/Ingress headers must not bypass the real
-          # 172.30.32.2 Home Assistant peer check.
           docker run -d --name laufapp-security \
             -e LAUFAPP_TRUSTED_INGRESS_ONLY=1 \
             -e LAUFAPP_HEALTH_AUTO_EXPORT_TOKEN="$TOKEN" \
@@ -124,7 +123,28 @@ jobs:
             -H 'X-Forwarded-For: 127.0.0.1' \
             -H 'X-Hass-Source: core.ingress' \
             -H 'X-Ingress-Path: /api/hassio_ingress/forged' \
+            -H 'X-Remote-User-Id: forged-user' \
             http://127.0.0.1:28099/)" = "403"
+          docker rm -f laufapp-security >/dev/null
+
+          docker network create --subnet 172.30.32.0/23 ha-ingress-test
+          docker run -d --name laufapp-ingress \
+            --network ha-ingress-test --ip 172.30.33.50 \
+            -e LAUFAPP_TRUSTED_INGRESS_ONLY=1 \
+            laufapp-ci:${{ github.sha }}
+          for i in $(seq 1 60); do
+            if docker exec laufapp-ingress python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8099/api/health',timeout=1).read()"; then break; fi
+            sleep 1
+          done
+
+          docker run --rm --network ha-ingress-test --ip 172.30.32.2 --entrypoint python laufapp-ci:${{ github.sha }} -c \
+            "import urllib.request; r=urllib.request.urlopen('http://172.30.33.50:8099/',timeout=3); assert r.status==200 and b'Laufapp' in r.read()"
+
+          docker run --rm --network ha-ingress-test --ip 172.30.33.5 --entrypoint python laufapp-ci:${{ github.sha }} -c \
+            "import urllib.request; q=urllib.request.Request('http://172.30.33.50:8099/',headers={'X-Ingress-Path':'/api/hassio_ingress/test-session','X-Remote-User-Id':'ci-user'}); r=urllib.request.urlopen(q,timeout=3); assert r.status==200 and b'Laufapp' in r.read()"
+
+          docker run --rm --network ha-ingress-test --ip 172.30.33.6 --entrypoint python laufapp-ci:${{ github.sha }} -c \
+            "import http.client; c=http.client.HTTPConnection('172.30.33.50',8099,timeout=3); c.request('GET','/',headers={'X-Ingress-Path':'/api/hassio_ingress/test-session'}); r=c.getresponse(); assert r.status==403"
 
       - name: Gateway remains closed without a strong token
         run: |

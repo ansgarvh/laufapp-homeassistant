@@ -1,5 +1,16 @@
 # Laufapp Changelog
 
+## v0.2.9 – 2026-08-30
+
+- Browser-/Ingress-Erreichbarkeit korrigiert: Der in v0.2.7 eingeführte ausschließlich auf `172.30.32.2` fixierte Ingress-Guard erhält einen eng begrenzten Kompatibilitätspfad für reale Home-Assistant-interne Peers.
+- Der dokumentierte Home-Assistant-Ingress-Proxy `172.30.32.2` bleibt direkt zugelassen. Andere Peers werden ausschließlich innerhalb des internen Netzes `172.30.32.0/23` akzeptiert und benötigen zusätzlich einen `X-Ingress-Path` unter `/api/hassio_ingress/` sowie einen Authentifizierungsmarker (`X-Remote-User-Id` oder `X-Hass-Source: core.ingress`).
+- Externe/Host-seitige Clients bleiben selbst mit gefälschtem `X-Forwarded-For`, `X-Hass-Source`, `X-Ingress-Path` und `X-Remote-User-Id` gesperrt; Uvicorn vertraut weiterhin keine Proxy-Header und Port 8099 bleibt unveröffentlicht.
+- Blockierte Zugriffe werden über `LAUFAPP_INGRESS_BLOCKED` diagnostizierbar. Geloggt werden Peer-IP, Pfad und nur boolesche Angaben zum Vorhandensein relevanter Ingress-Marker; Benutzer-IDs oder Tokens werden nicht protokolliert.
+- Neue positive Docker-E2E-Prüfung erzeugt ein eigenes `172.30.32.0/23`-Netz und prüft: Zugriff vom kanonischen `.2`-Proxy, Zugriff eines anderen internen Peers mit authentifizierten Ingress-Markern sowie HTTP 403 ohne diese Marker.
+- Bestehende v0.2.8-Importdiagnose, vollständige Background-Tracebacks, Shutdown-/Child-Exit-Logging und sämtliche Health-Auto-Export-Sicherheitsmechanismen bleiben erhalten.
+- Keine Datenbankschemamigration und keine Änderung an Trainingslogik, Prognosen, Apple-Health-Daten, GPS/Samples oder Bestzeiten.
+- Statisch/isoliert und in Linux/Docker getestet; reale Home-Assistant-/Supervisor-Integration muss nach Installation auf dem Beelink verifiziert werden.
+
 ## v0.2.8 – 2026-08-30
 
 - Erfolgreiche `/api/health`- und Gateway-`/health`-Polls werden aus dem Uvicorn-Access-Log gefiltert, damit Supervisor-/Watchdog-Abfragen relevante Fehler nicht mehr aus dem Logpuffer verdrängen; fehlgeschlagene Health-Requests und alle anderen API-Aufrufe bleiben sichtbar.
