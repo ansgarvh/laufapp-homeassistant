@@ -45,48 +45,41 @@ jobs:
         run: python tests/randomized_runner_simulator.py
       - name: Docker build
         run: docker build --pull --build-arg BUILD_VERSION=$(python -c "import yaml; print(yaml.safe_load(open('laufapp/config.yaml'))['version'])") --build-arg BUILD_ARCH=amd64 -t laufapp-ci:${{ github.sha }} laufapp
-      - name: Docker runtime smoke test
+      - name: Docker runtime and Health Auto Export smoke test
         run: |
           set -euo pipefail
-          docker run -d --name laufapp-smoke -e LAUFAPP_TRUSTED_INGRESS_ONLY=0 -p 18099:8099 laufapp-ci:${{ github.sha }}
+          docker run -d --name laufapp-smoke -e LAUFAPP_TRUSTED_INGRESS_ONLY=0 -e LAUFAPP_HEALTH_AUTO_EXPORT_TOKEN=ci-secret -p 18099:8099 -p 18100:8100 laufapp-ci:${{ github.sha }}
           trap 'docker logs laufapp-smoke || true; docker rm -f laufapp-smoke >/dev/null 2>&1 || true' EXIT
           for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:18099/api/health > /tmp/laufapp-health.json; then break; fi
+            if curl -fsS http://127.0.0.1:18099/api/health > /tmp/laufapp-health.json && curl -fsS http://127.0.0.1:18100/health > /tmp/gateway-health.json; then break; fi
             sleep 1
           done
           python - <<'PY'
           import json, yaml
-          data=json.load(open('/tmp/laufapp-health.json'))
           expected=yaml.safe_load(open('laufapp/config.yaml'))['version']
-          assert data == {'ok': True, 'version': expected}, data
+          assert json.load(open('/tmp/laufapp-health.json')) == {'ok': True, 'version': expected}
+          assert json.load(open('/tmp/gateway-health.json')) == {'ok': True, 'version': expected}
           PY
           curl -fsS -D /tmp/root.headers -o /tmp/root.html http://127.0.0.1:18099/
           grep -qi '^cache-control: no-store, max-age=0' /tmp/root.headers
-          grep -q 'assets/v020.js?v=0.2.5' /tmp/root.html
-          grep -q 'assets/v020_science.js?v=0.2.5' /tmp/root.html
-          grep -q 'assets/v023_aggressiveness.js?v=0.2.5' /tmp/root.html
           grep -q 'assets/v025.js?v=0.2.5' /tmp/root.html
-          curl -fsS -o /tmp/healthkit.json -H 'Content-Type: application/json' -d '{"schema_version":1,"source":"laufapp_ios","device_id":"ci","workouts":[{"id":"ci-healthkit-run","activity_type":"running","start_at":"2026-08-30T08:00:00+02:00","end_at":"2026-08-30T08:30:00+02:00","distance_km":6.0,"duration_s":1800,"samples":[{"id":"ci-hr","type":"heart_rate","at":"2026-08-30T08:01:00+02:00","value":145,"unit":"count/min"}],"route":[]}],"metrics":[]}' http://127.0.0.1:18099/api/v3/healthkit/sync
+          curl -fsS -o /tmp/races.json http://127.0.0.1:18099/api/v2/races
+          curl -fsS -o /tmp/settings.json http://127.0.0.1:18099/api/settings
+          curl -fsS -o /tmp/marks.json http://127.0.0.1:18099/api/v2/performance-marks
           python - <<'PY'
           import json
-          data=json.load(open('/tmp/healthkit.json'))
-          assert data['ok'] is True and data['workouts_added']==1 and data['samples_added']==1, data
+          assert isinstance(json.load(open('/tmp/races.json')), list)
+          assert isinstance(json.load(open('/tmp/marks.json')).get('stored'), list)
           PY
-          curl -fsS -o /tmp/healthkit-status.json http://127.0.0.1:18099/api/v3/healthkit/status
+          cat > /tmp/hae.json <<'JSON'
+          {"data":{"workouts":[{"id":"ci-hae-run","name":"Running","start":"2026-08-30 08:00:00 +0200","end":"2026-08-30 08:30:00 +0200","duration":1800,"distance":{"qty":5.0,"units":"km"},"avgHeartRate":{"qty":150,"units":"bpm"},"heartRateData":[{"date":"2026-08-30 08:00:01 +0200","Avg":145,"units":"bpm"}],"runningPower":[{"date":"2026-08-30 08:00:01 +0200","qty":300,"units":"W"}],"route":[{"latitude":50.775,"longitude":6.083,"altitude":180,"timestamp":"2026-08-30 08:00:00 +0200"}]}],"metrics":[{"name":"resting_heart_rate","units":"bpm","data":[{"qty":49,"date":"2026-08-30 06:00:00 +0200"}]}]}}
+          JSON
+          test "$(curl -sS -o /tmp/unauth.json -w '%{http_code}' -H 'Content-Type: application/json' --data-binary @/tmp/hae.json http://127.0.0.1:18100/health-auto-export)" = "401"
+          curl -fsS -H 'Authorization: Bearer ci-secret' -H 'Content-Type: application/json' --data-binary @/tmp/hae.json http://127.0.0.1:18100/health-auto-export > /tmp/hae-result.json
+          curl -fsS -H 'X-Laufapp-Token: ci-secret' -H 'Content-Type: application/json' --data-binary @/tmp/hae.json http://127.0.0.1:18100/health-auto-export > /tmp/hae-result-2.json
           python - <<'PY'
           import json
-          data=json.load(open('/tmp/healthkit-status.json'))
-          assert data['connected_source']=='native_healthkit' and data['live_runs']>=1, data
+          first=json.load(open('/tmp/hae-result.json')); second=json.load(open('/tmp/hae-result-2.json'))
+          assert first['ok'] and first['runs_added']==1 and first['samples_added']==2 and first['gps_points_added']==1 and first['health_metrics_added']==1, first
+          assert second['ok'] and second['runs_existing']==1 and second['samples_added']==0 and second['gps_points_added']==0 and second['health_metrics_added']==0, second
           PY
-
-  ios-build:
-    runs-on: macos-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Install XcodeGen
-        run: brew install xcodegen
-      - name: Generate Xcode project
-        run: cd ios && xcodegen generate
-      - name: Compile iOS companion for simulator
-        run: xcodebuild -project ios/Laufapp.xcodeproj -scheme Laufapp -sdk iphonesimulator -configuration Debug CODE_SIGNING_ALLOWED=NO build
