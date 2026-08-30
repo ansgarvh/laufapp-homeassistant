@@ -56,7 +56,7 @@
 - Klassischer Apple-Health-ZIP/XML-Pfad gehärtet: ZIP-Bomb-/Dateianzahl-/GPX-Größen-/Punktlimits, GPS-Plausibilisierung und `defusedxml` gegen XML-Entity-Expansion/externe XML-Referenzen.
 - Dependency-Audit identifizierte bekannte Sicherheitslücken in der zuvor verwendeten Starlette-Version 0.50.0. Runtime-Stack auf FastAPI 0.141.1 / Starlette 1.6.0 aktualisiert; direkte Runtime-Abhängigkeiten gepinnt und `pip-audit` als Release-Gate ergänzt.
 - Bandit-Security-Scan mit review-bewusstem Gate ergänzt; neue Medium/High-Findings blockieren die CI. GitHub Actions sind auf konkrete Commit-SHAs gepinnt und besitzen nur `contents: read`.
-- Dynamische Frontend-Renderpfade auf Stored/Reflected XSS geprüft; im geprüften Pfad keine offene Stored-XSS-Lücke gefunden.
+- Dynamische Frontend-Renderpfade auf Stored/Reflected XSS geprüft; im geprüften Pfad keine offene XSS-Lücke gefunden.
 - Keine Datenbankschemamigration und keine fachliche Änderung der Trainingslogik.
 - Statisch/isoliert und in Linux/Docker getestet; reale Home-Assistant-/Supervisor-/VPN-/Health-Auto-Export-iPhone-Integration muss lokal verifiziert werden.
 
