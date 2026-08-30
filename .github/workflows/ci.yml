@@ -108,8 +108,6 @@ jobs:
 
           docker rm -f laufapp-smoke >/dev/null
 
-          # External/host-side callers remain blocked even when they forge all
-          # known Ingress headers.
           docker run -d --name laufapp-security \
             -e LAUFAPP_TRUSTED_INGRESS_ONLY=1 \
             -e LAUFAPP_HEALTH_AUTO_EXPORT_TOKEN="$TOKEN" \
@@ -129,10 +127,6 @@ jobs:
             http://127.0.0.1:28099/)" = "403"
           docker rm -f laufapp-security >/dev/null
 
-          # Positive Home Assistant Ingress simulation on the documented internal
-          # 172.30.32.0/23 network. This closes the previous test gap: we verify
-          # that the UI is actually reachable from the canonical .2 proxy and from
-          # another HA-internal peer only when authenticated Ingress markers exist.
           docker network create --subnet 172.30.32.0/23 ha-ingress-test
           docker run -d --name laufapp-ingress \
             --network ha-ingress-test --ip 172.30.33.50 \
@@ -150,8 +144,7 @@ jobs:
             "import urllib.request; q=urllib.request.Request('http://172.30.33.50:8099/',headers={'X-Ingress-Path':'/api/hassio_ingress/test-session','X-Remote-User-Id':'ci-user'}); r=urllib.request.urlopen(q,timeout=3); assert r.status==200 and b'Laufapp' in r.read()"
 
           docker run --rm --network ha-ingress-test --ip 172.30.33.6 --entrypoint python laufapp-ci:${{ github.sha }} -c \
-            "import urllib.request,urllib.error; q=urllib.request.Request('http://172.30.33.50:8099/',headers={'X-Ingress-Path':'/api/hassio_ingress/test-session'}); \
-try:\n urllib.request.urlopen(q,timeout=3); raise SystemExit('expected 403')\nexcept urllib.error.HTTPError as e:\n assert e.code==403"
+            "import http.client; c=http.client.HTTPConnection('172.30.33.50',8099,timeout=3); c.request('GET','/',headers={'X-Ingress-Path':'/api/hassio_ingress/test-session'}); r=c.getresponse(); assert r.status==403"
 
       - name: Gateway remains closed without a strong token
         run: |
