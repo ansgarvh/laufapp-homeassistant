@@ -4,14 +4,14 @@ ROOT=Path(__file__).resolve().parents[1]
 
 def test_versions_and_assets():
     cfg=yaml.safe_load((ROOT/'laufapp/config.yaml').read_text())
-    assert cfg['version']=='0.2.11'
-    assert 'APP_VERSION = "0.2.11"' in (ROOT/'laufapp/app/main_v0211.py').read_text()
-    assert 'ARG BUILD_VERSION=0.2.11' in (ROOT/'laufapp/Dockerfile').read_text()
-    assert 'main_v0211:app' in (ROOT/'laufapp/run.sh').read_text()
-    assert '# Laufapp v0.2.11' in (ROOT/'README.md').read_text()
-    assert '## v0.2.11 – 2026-08-30' in (ROOT/'CHANGELOG.md').read_text()
-    assert (ROOT/'RELEASE_NOTES_v0.2.11.md').exists()
-    assert 'Laufapp v0.2.11' in (ROOT/'RELEASE_NOTES_v0.2.11.md').read_text()
+    assert cfg['version']=='0.2.12'
+    assert 'APP_VERSION = "0.2.12"' in (ROOT/'laufapp/app/main_v0212.py').read_text()
+    assert 'ARG BUILD_VERSION=0.2.12' in (ROOT/'laufapp/Dockerfile').read_text()
+    assert 'main_v0212:app' in (ROOT/'laufapp/run.sh').read_text()
+    assert '# Laufapp v0.2.12' in (ROOT/'README.md').read_text()
+    assert '## v0.2.12 – 2026-08-30' in (ROOT/'CHANGELOG.md').read_text()
+    assert (ROOT/'RELEASE_NOTES_v0.2.12.md').exists()
+    assert 'Laufapp v0.2.12' in (ROOT/'RELEASE_NOTES_v0.2.12.md').read_text()
     static=ROOT/'laufapp/app/static'
     for name in ['index.html','styles.css','bugfix.css','app.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','assets/bugfix.css','assets/v020.js','assets/v020.css','assets/v020_science.js','assets/v020_science.css','assets/v023_aggressiveness.js','assets/v025.js','assets/v025.css']:assert (static/name).exists()
     m=json.loads((static/'manifest.webmanifest').read_text());assert m['display']=='standalone'
@@ -56,12 +56,16 @@ def test_ha_app_config_and_health_auto_export_gateway():
     gateway=(ROOT/'laufapp/app/health_auto_export_gateway.py').read_text()
     assert '@app.post("/health-auto-export")' in gateway
     assert '@app.post("/home-assistant-relay")' in gateway
-    assert 'from main_v0211 import APP_VERSION' in gateway
+    assert 'from main_v0212 import APP_VERSION' in gateway
     assert 'LAUFAPP_HAE_RELAY_OK transport=nabu_casa' in gateway
     assert 'openapi_url=None' in gateway and 'Cache-Control' in gateway
     hae=(ROOT/'laufapp/app/health_auto_export_v027.py').read_text()
     assert 'MIN_TOKEN_LENGTH = 48' in hae and 'previous.authorized' in hae
     assert 'Workout-ID kollidiert' in hae
+    compat=(ROOT/'laufapp/app/health_auto_export_v0212.py').read_text()
+    assert 'outdoor ausführen' in compat.casefold()
+    assert '_active_energy_series_kcal' in compat
+    assert 'totalEnergy' in compat and 'must not be substituted' in compat
     runtime=(ROOT/'laufapp/app/main_v027.py').read_text()
     assert 'HOME_ASSISTANT_INTERNAL_NETWORK = ipaddress.ip_network("172.30.32.0/23")' in runtime
     assert 'HOME_ASSISTANT_INGRESS_PROXY = ipaddress.ip_address("172.30.32.2")' in runtime
@@ -78,7 +82,7 @@ def test_ha_app_config_and_health_auto_export_gateway():
     assert '.diagnostics.jsonl' in imports
     assert 'traceback.format_exc()' in imports
     assert 'resumed_after_restart' in imports
-    assert (ROOT/'laufapp/app/main_v0211.py').exists()
+    assert (ROOT/'laufapp/app/main_v0212.py').exists()
     assert not (ROOT/'laufapp/app/main_v030.py').exists()
     assert not (ROOT/'laufapp/app/ios_healthkit_sync.py').exists()
 
@@ -88,7 +92,7 @@ def test_direct_home_assistant_webhook_relay_is_pinned_and_bounded():
     assert (component/'__init__.py').exists() and (component/'manifest.json').exists()
     manifest=json.loads((component/'manifest.json').read_text())
     assert manifest['domain']=='laufapp_hae_relay'
-    assert manifest['version']=='0.2.11'
+    assert manifest['version']=='0.2.12'
     assert manifest['requirements']==[]
     assert 'webhook' in manifest['dependencies']
     source=(component/'__init__.py').read_text()
