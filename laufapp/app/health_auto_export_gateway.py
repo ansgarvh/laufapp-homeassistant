@@ -8,7 +8,7 @@ app network; the same strong Laufapp token is required on that internal hop.
 
 from fastapi import FastAPI, Header, Request
 
-from main_v0211 import APP_VERSION, process_health_auto_export_request
+from main_v0212 import APP_VERSION, process_health_auto_export_request
 
 app = FastAPI(
     title="Laufapp Health Sync Gateway",
@@ -51,9 +51,9 @@ async def home_assistant_relay(
     """Receive JSON relayed by Home Assistant from Nabu Casa remote access.
 
     The public webhook credential is deliberately not accepted as Laufapp
-    authentication. Home Assistant must add the separate strong Laufapp token
-    on this internal hop. Bearer authentication is intentionally not exposed on
-    this dedicated route so the documented relay has one unambiguous contract.
+authentication. Home Assistant must add the separate strong Laufapp token
+on this internal hop. Bearer authentication is intentionally not exposed on
+this dedicated route so the documented relay has one unambiguous contract.
     """
     result = await process_health_auto_export_request(request, None, x_laufapp_token)
     print(
