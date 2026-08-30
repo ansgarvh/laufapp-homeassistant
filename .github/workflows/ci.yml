@@ -31,7 +31,7 @@ jobs:
       - name: Dependency vulnerability audit
         run: pip-audit -r laufapp/requirements.txt
       - name: Python compile check
-        run: python -m compileall -q laufapp/app tests
+        run: python -m compileall -q laufapp/app tests scripts
       - name: JavaScript syntax check
         run: |
           node --check laufapp/app/static/app.js
@@ -125,3 +125,21 @@ jobs:
             -H 'X-Hass-Source: core.ingress' \
             -H 'X-Ingress-Path: /api/hassio_ingress/forged' \
             http://127.0.0.1:28099/)" = "403"
+
+      - name: Gateway remains closed without a strong token
+        run: |
+          set -euo pipefail
+          docker run -d --name laufapp-no-token \
+            -e LAUFAPP_TRUSTED_INGRESS_ONLY=0 \
+            -p 38099:8099 -p 38100:8100 \
+            laufapp-ci:${{ github.sha }}
+          trap 'docker logs laufapp-no-token || true; docker rm -f laufapp-no-token >/dev/null 2>&1 || true' EXIT
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:38099/api/health >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:38099/api/health >/dev/null
+          if curl --connect-timeout 1 -fsS http://127.0.0.1:38100/health >/dev/null 2>&1; then
+            echo 'Health Auto Export gateway unexpectedly reachable without a strong token' >&2
+            exit 1
+          fi
