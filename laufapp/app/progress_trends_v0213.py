@@ -84,19 +84,18 @@ def build_training_trends(
         (cutoff.isoformat(), current.isoformat()),
     ).fetchall()
 
-    run_ids = [int(r["id"]) for r in run_rows]
     cadence_by_run: dict[int, float] = {}
-    if run_ids:
-        placeholders = ",".join("?" for _ in run_ids)
-        cadence_rows = c.execute(
-            f"SELECT run_id,AVG(value) AS cadence FROM run_samples "
-            f"WHERE metric_type='cadence' AND run_id IN ({placeholders}) GROUP BY run_id",
-            tuple(run_ids),
-        ).fetchall()
-        for row in cadence_rows:
-            value = _number(row["cadence"])
-            if value is not None and 60.0 <= value <= 240.0:
-                cadence_by_run[int(row["run_id"])] = value
+    cadence_rows = c.execute(
+        "SELECT rs.run_id,AVG(rs.value) AS cadence "
+        "FROM run_samples rs JOIN runs r ON r.id=rs.run_id "
+        "WHERE rs.metric_type=? AND substr(r.started_at,1,10)>=? "
+        "AND substr(r.started_at,1,10)<=? GROUP BY rs.run_id",
+        ("cadence", cutoff.isoformat(), current.isoformat()),
+    ).fetchall()
+    for row in cadence_rows:
+        value = _number(row["cadence"])
+        if value is not None and 60.0 <= value <= 240.0:
+            cadence_by_run[int(row["run_id"])] = value
 
     coverage = {
         "runs": len(run_rows),
