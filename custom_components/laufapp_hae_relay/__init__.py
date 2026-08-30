@@ -10,9 +10,11 @@ characters and therefore cannot carry detailed workout payloads reliably.
 from __future__ import annotations
 
 import asyncio
+from collections import deque
 from http import HTTPStatus
 import logging
 import re
+import time
 
 from aiohttp import ClientError, web
 import voluptuous as vol
@@ -30,7 +32,11 @@ CONF_TOKEN = "token"
 TARGET_URL = "http://c87ed7df-laufapp:8100/home-assistant-relay"
 MAX_BODY_BYTES = 16 * 1024 * 1024
 MAX_RESPONSE_BYTES = 64 * 1024
+READ_TIMEOUT_SECONDS = 120
 FORWARD_TIMEOUT_SECONDS = 125
+MAX_REQUESTS_PER_MINUTE = 12
+MAX_CONCURRENT_FORWARDS = 3
+CONCURRENCY_WAIT_SECONDS = 1
 MIN_TOKEN_LENGTH = 48
 MAX_TOKEN_LENGTH = 256
 MIN_UNIQUE_TOKEN_CHARS = 8
@@ -103,9 +109,13 @@ async def _forward_to_laufapp(
         )
 
     try:
-        body = await _read_limited_body(request)
+        async with asyncio.timeout(READ_TIMEOUT_SECONDS):
+            body = await _read_limited_body(request)
     except PayloadTooLargeError:
         return _error_response(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "payload too large")
+    except TimeoutError:
+        _LOGGER.warning("Timed out reading Health Auto Export webhook body")
+        return _error_response(HTTPStatus.REQUEST_TIMEOUT, "request timeout")
 
     if not body:
         return _error_response(HTTPStatus.BAD_REQUEST, "empty JSON body")
@@ -166,10 +176,33 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         )
         return False
 
+    recent_requests: deque[float] = deque()
+    rate_lock = asyncio.Lock()
+    forward_slots = asyncio.Semaphore(MAX_CONCURRENT_FORWARDS)
+
     async def _handle_webhook(
         _hass: HomeAssistant, _webhook_id: str, request: web.Request
     ) -> web.Response:
-        return await _forward_to_laufapp(hass, request, token)
+        now = time.monotonic()
+        async with rate_lock:
+            while recent_requests and now - recent_requests[0] >= 60.0:
+                recent_requests.popleft()
+            if len(recent_requests) >= MAX_REQUESTS_PER_MINUTE:
+                _LOGGER.warning("Laufapp HAE webhook rate limit reached")
+                return _error_response(HTTPStatus.TOO_MANY_REQUESTS, "rate limit")
+            recent_requests.append(now)
+
+        try:
+            await asyncio.wait_for(
+                forward_slots.acquire(), timeout=CONCURRENCY_WAIT_SECONDS
+            )
+        except TimeoutError:
+            _LOGGER.warning("Laufapp HAE webhook concurrency limit reached")
+            return _error_response(HTTPStatus.TOO_MANY_REQUESTS, "relay busy")
+        try:
+            return await _forward_to_laufapp(hass, request, token)
+        finally:
+            forward_slots.release()
 
     try:
         webhook.async_register(
