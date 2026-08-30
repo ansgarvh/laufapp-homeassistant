@@ -1,5 +1,36 @@
 # Laufapp Changelog
 
+## v0.2.6 – 2026-08-30
+
+- Release-Linie funktional wieder auf den vollständig getesteten v0.2.5-Stand gesetzt; die zwischenzeitlich entwickelte native v0.3.0-iOS-/HealthKit-App und deren macOS-CI-Pfad wurden entfernt.
+- **Health Auto Export JSON Export Version 2** als kontinuierliche Apple-Health-Schnittstelle ergänzt. Unterstützt werden Laufworkouts mit stabiler Workout-ID, Start/Ende, Dauer, Distanz, Kalorien, Höhenmetern und mittlerer Herzfrequenz.
+- Detaillierte Workoutdaten werden in den bestehenden v0.2.5-Strukturen gespeichert: Herzfrequenz, Running Speed, Running Power, Schrittlänge, vertikale Oszillation, Bodenkontaktzeit, dokumentierte Workout-Kadenz sowie GPS-Route/Höhe.
+- Allgemeine Health-Metriken unterstützen Ruhepuls, HRV/SDNN, Gewicht, VO₂max und Schlafdauer.
+- Wiederholte Zustellung ist über Workout-ID und deterministische Sample-/Metric-IDs idempotent; neue Läufe werden wie bisher mit dem Trainingsplan gematcht und anschließend Bestzeiten und Prognosen aktualisiert.
+- Hauptanwendung bleibt **Home-Assistant-Ingress-only** auf Port 8099. Ein separater minimaler, tokenpflichtiger Sync-Gateway auf Port 8100 stellt nur `/health` und `POST /health-auto-export` bereit und ist standardmäßig nicht veröffentlicht.
+- Neues Secret `health_auto_export_token` als Home-Assistant-Passwortoption; Bearer- oder `X-Laufapp-Token`-Authentifizierung mit timing-resistentem Vergleich. Größen- und Mengenlimits schützen die Importstrecke.
+- Port 8100 ist nur für bewusst abgesicherten LAN-/VPN-/HTTPS-Betrieb vorgesehen und darf nicht unverschlüsselt ins Internet weitergeleitet werden.
+- Keine Datenbankschemamigration. Bestehende v0.2.5-Daten und der manuelle Apple-Health-ZIP/XML-Import bleiben vollständig erhalten.
+- Validierung: Python-Compilecheck, JavaScript-Syntaxchecks, vollständige Pytest-Regression, 16-Wochen-Marathonsimulation, neun randomisierte Läuferprofile, Docker-Build sowie Docker-Runtime-E2E mit abgelehntem unauthentifiziertem Request, authentifiziertem HAE-v2-Import und idempotentem Reimport erfolgreich.
+- Statisch/isoliert und in Linux/Docker getestet; reale Health-Auto-Export-/Home-Assistant-/iPhone-Übertragung muss lokal verifiziert werden.
+
+## v0.2.5 – 2026-08-29
+
+- Bestzeiten im Fortschritt-Bereich sichtbar gemacht, inklusive Quelle, Datum und aufklappbarer vollständiger Übersicht.
+- Prognosekarten markieren Verbesserungen gegenüber bestätigten Bestzeiten und erklären beim Halbmarathon den verwendeten Leistungsanker.
+- Mobile Bottom-Navigation kompakter gestaltet, ohne den iPhone-Safe-Area-Schutz vollständig zu entfernen.
+- Progressionssignal ergänzt: kontinuierliche Trainingsentwicklung seit einer bestätigten Bestzeit kann bei ausreichend belastbarer 8-Wochen-Historie einen begrenzten Prognosefortschritt stützen; reine verstrichene Zeit erzeugt keine Verbesserung.
+- Keine Datenbankschemamigration; bestehende Daten und v0.2.4-Leistungsanker bleiben erhalten.
+- Validierung: Python-Compilecheck, JavaScript-Syntaxchecks, vollständige Regression, 16-Wochen-Marathonsimulation, neun randomisierte Läuferprofile, Docker-Build und Docker-Runtime-Smoke-Test erfolgreich.
+
+## v0.2.4 – 2026-08-29
+
+- Manuelle Bestzeiten bleiben harte Leistungsanker; Apple-Health-Läufe der letzten 24 Monate werden zusätzlich auf standarddistanznahe Bestleistungen für 5 km, 10 km, Halbmarathon und Marathon geprüft.
+- Kleine Distanzabweichungen werden konservativ mit dem bestehenden Riegel-Modell normalisiert. Automatische Bestzeiten ersetzen ausschließlich automatisch erzeugte Einträge und niemals manuelle/Race-/Time-Trial-Marken.
+- Prognoseengine berücksichtigt Qualität, Aktualität und Extrapolationsdistanz der Leistungsanker und kann jüngere, belastbare Trainingsleistung gegen ältere Bestzeiten abwägen.
+- Neue APIs für Bestzeitenanzeige und explizite Apple-Health-Bestzeit-Synchronisation.
+- Keine Datenbankschemamigration; bestehende Apple-Health-, Trainings- und Nutzerdaten bleiben erhalten.
+
 ## v0.2.2 – 2026-08-29
 
 - Produktionsnahen Frontend-Auslieferungsfehler behoben: Der FastAPI-/Starlette-Mount `/assets` zeigte auf `static/` statt auf das tatsächliche Verzeichnis `static/assets/`. Dadurch wurden die v0.2-Erweiterungen im realen Add-on mit HTTP 404 beantwortet, während die Basis-UI weiter funktionierte.
