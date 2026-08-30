@@ -104,6 +104,7 @@
 - Keine Datenbankschemamigration.
 
 ## v0.2.0 – 2026-08-29
+
 - Mehrere zukünftige Wettkämpfe können unter **Einstellungen → Rennen** gepflegt, bearbeitet und gelöscht werden. Bestehende v0.1.9-Wettkämpfe werden kompatibel als A-Rennen behandelt.
 - **A-Rennen** steuern den Trainingsblock vollständig; das jeweils nächste zukünftige A-Rennen ist der Planfokus, nach dessen Rennwoche übernimmt automatisch das nächste A-Rennen.
 - **B-Rennen** lösen keinen Taper und keine Änderung der vorherigen Trainingswochen aus. In ihrer Rennwoche ersetzen sie ausschließlich den Longrun; die übrigen Trainingseinheiten bleiben in einer normalen konfliktfreien Woche unverändert.
@@ -138,6 +139,7 @@
 - Keine Datenbankschemaänderung; Apple-Health-Daten, Läufe, Schuhe, Wettkämpfe, Einstellungen und manuelle Planänderungen bleiben erhalten.
 
 ## v0.1.8 – 2026-08-28
+
 - Dedizierte mobile Einstellungen-Navigation mit persistenten, serverseitig validierten Planungslimits.
 - Deterministische Engine unterstützt 3–7 Lauftage, 1–3 Qualitätseinheiten, automatische/manuelle Wochenobergrenze und distanzabhängige Longrun-Obergrenzen (Marathon: 35 km). Intensive Longruns verbrauchen dabei ein Qualitätsbudget.
 - Planneuberechnung aus Woche entfernt und nach Einstellungen verschoben; stale Hinweis verlinkt dorthin.
