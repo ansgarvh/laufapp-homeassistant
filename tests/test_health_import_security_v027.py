@@ -3,6 +3,8 @@ import sqlite3
 import zipfile
 from datetime import date
 
+from defusedxml.common import EntitiesForbidden
+
 import health_import as health
 import health_import_hardening_v027 as hardening
 
@@ -30,6 +32,18 @@ def test_hardened_zip_rejects_ambiguous_export_xml(tmp_path):
         assert False, "multiple export.xml files must be rejected"
     except ValueError as exc:
         assert "genau eine export.xml" in str(exc)
+
+
+def test_defused_parser_rejects_entity_expansion():
+    hardening.install()
+    malicious = io.BytesIO(
+        b'<!DOCTYPE x [<!ENTITY boom "expanded">]><HealthData><Record value="&boom;"/></HealthData>'
+    )
+    try:
+        list(health.ET.iterparse(malicious, events=("end",)))
+        assert False, "XML entities must be rejected"
+    except EntitiesForbidden:
+        pass
 
 
 def test_hardened_route_rejects_excessive_point_count(monkeypatch):
