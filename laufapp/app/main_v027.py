@@ -88,6 +88,12 @@ def _trusted_ingress_compat_request(request: Request) -> bool:
     return ingress_path.startswith("/api/hassio_ingress/") and authenticated_marker
 
 
+# The base application still contains the historical Ingress middleware. Patch
+# only its trust predicate so both middleware layers apply the exact same
+# network-bound rule; no legacy routes or application behavior are replaced.
+core.legacy._trusted_ingress_request = _trusted_ingress_compat_request
+
+
 @app.middleware("http")
 async def strict_home_assistant_ingress_boundary(request: Request, call_next):
     """Keep port 8099 Ingress-only while tolerating HA-internal proxy variants."""
