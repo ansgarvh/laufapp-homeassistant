@@ -8,6 +8,10 @@ def test_versions_and_assets():
     assert 'APP_VERSION = "0.2.10"' in (ROOT/'laufapp/app/main_v0210.py').read_text()
     assert 'ARG BUILD_VERSION=0.2.10' in (ROOT/'laufapp/Dockerfile').read_text()
     assert 'main_v0210:app' in (ROOT/'laufapp/run.sh').read_text()
+    assert '# Laufapp v0.2.10' in (ROOT/'README.md').read_text()
+    assert '## v0.2.10 – 2026-08-30' in (ROOT/'CHANGELOG.md').read_text()
+    assert (ROOT/'RELEASE_NOTES_v0.2.10.md').exists()
+    assert 'Laufapp v0.2.10' in (ROOT/'RELEASE_NOTES_v0.2.10.md').read_text()
     static=ROOT/'laufapp/app/static'
     for name in ['index.html','styles.css','bugfix.css','app.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','assets/bugfix.css','assets/v020.js','assets/v020.css','assets/v020_science.js','assets/v020_science.css','assets/v023_aggressiveness.js','assets/v025.js','assets/v025.css']:assert (static/name).exists()
     m=json.loads((static/'manifest.webmanifest').read_text());assert m['display']=='standalone'
