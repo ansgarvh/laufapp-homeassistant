@@ -20,6 +20,17 @@ def test_internal_authenticated_ingress_compatibility_path():
     assert main_v027._trusted_ingress_compat_request(req) is True
 
 
+def test_legacy_middleware_uses_same_network_bound_trust_predicate():
+    import main_v027
+
+    assert main_v027.core.legacy._trusted_ingress_request is main_v027._trusted_ingress_compat_request
+    req=_request('172.30.33.5',{
+        'X-Ingress-Path':'/api/hassio_ingress/session-token',
+        'X-Remote-User-Id':'user-id',
+    })
+    assert main_v027.core.legacy._trusted_ingress_request(req) is True
+
+
 def test_internal_peer_without_authenticated_ingress_markers_is_rejected():
     import main_v027
 
@@ -38,6 +49,7 @@ def test_external_peer_cannot_bypass_with_forged_ingress_headers():
         'X-Hass-Source':'core.ingress',
     })
     assert main_v027._trusted_ingress_compat_request(req) is False
+    assert main_v027.core.legacy._trusted_ingress_request(req) is False
 
 
 def test_documented_ingress_proxy_and_internal_network_constants():
