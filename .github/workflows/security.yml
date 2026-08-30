@@ -27,4 +27,6 @@ jobs:
       - name: Dependency vulnerabilities
         run: pip-audit -r laufapp/requirements.txt
       - name: Python security scan
-        run: bandit -r laufapp/app -ll -ii
+        run: |
+          bandit -r laufapp/app -ll -ii -f json -o /tmp/bandit.json || true
+          python scripts/bandit_gate.py /tmp/bandit.json
