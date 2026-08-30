@@ -32,9 +32,12 @@ core.legacy.APP_VERSION = APP_VERSION
 core.legacy.app.version = APP_VERSION
 core.training.VERSION = APP_VERSION
 
+# Compatibility export used by the separate minimal Health Auto Export gateway.
+process_health_auto_export_request = previous.process_health_auto_export_request
+
 
 class _HealthcheckAccessFilter(logging.Filter):
-    """Drop only successful health-poll request lines from Uvicorn access logs.
+    """Drop only high-frequency health-poll request lines from Uvicorn access logs.
 
     The filter deliberately leaves application errors and every non-health API
     request untouched. Uvicorn supplies the request path as the third formatting
