@@ -85,7 +85,10 @@ def test_sync_requires_json_and_enforces_streaming_size_limit(monkeypatch, tmp_p
             content=b"{}",
         )
         assert r.status_code == 415
-        monkeypatch.setattr(hae, "MAX_BODY_BYTES", 64)
+        # Patch the parser module actually resolved by the request handler.
+        # Newer release wrappers may replace main_v027.hae while preserving the
+        # same security contract.
+        monkeypatch.setattr(main_v027.hae, "MAX_BODY_BYTES", 64)
         r = c.post(
             "/api/v2/health-auto-export",
             headers={"Authorization": f"Bearer {STRONG_TOKEN}", "Content-Type": "application/json"},
