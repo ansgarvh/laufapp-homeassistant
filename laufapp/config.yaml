@@ -1,5 +1,5 @@
 name: "Laufapp"
-version: "0.2.10"
+version: "0.2.11"
 slug: "laufapp"
 description: "Privater datenbasierter Laufcoach als PWA mit Apple-Health-Import, gehärtetem Health Auto Export und optionalem OpenAI-Coach."
 arch:
@@ -18,7 +18,7 @@ ports:
   8100/tcp: null
 ports_description:
   8099/tcp: "Nicht veröffentlichen; Oberfläche ausschließlich über Home Assistant Ingress"
-  8100/tcp: "Interner Health-Auto-Export-Gateway; für Nabu-Casa-Relay nicht am Host/Router veröffentlichen"
+  8100/tcp: "Interner Health-Auto-Export-Gateway; für den Home-Assistant-Relay nicht am Host/Router veröffentlichen"
 options:
   openai_api_key: ""
   health_auto_export_token: ""
