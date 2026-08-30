@@ -28,6 +28,8 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r laufapp/requirements.txt -r requirements-dev.txt
+      - name: Dependency vulnerability audit
+        run: pip-audit -r laufapp/requirements.txt
       - name: Python compile check
         run: python -m compileall -q laufapp/app tests
       - name: JavaScript syntax check
@@ -45,21 +47,36 @@ jobs:
         run: python tests/randomized_runner_simulator.py
       - name: Docker build
         run: docker build --pull --build-arg BUILD_VERSION=$(python -c "import yaml; print(yaml.safe_load(open('laufapp/config.yaml'))['version'])") --build-arg BUILD_ARCH=amd64 -t laufapp-ci:${{ github.sha }} laufapp
-      - name: Docker runtime and Health Auto Export smoke test
+      - name: Docker runtime, HAE and hostile ingress security E2E
         run: |
           set -euo pipefail
-          docker run -d --name laufapp-smoke -e LAUFAPP_TRUSTED_INGRESS_ONLY=0 -e LAUFAPP_HEALTH_AUTO_EXPORT_TOKEN=ci-secret -p 18099:8099 -p 18100:8100 laufapp-ci:${{ github.sha }}
-          trap 'docker logs laufapp-smoke || true; docker rm -f laufapp-smoke >/dev/null 2>&1 || true' EXIT
-          for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:18099/api/health > /tmp/laufapp-health.json && curl -fsS http://127.0.0.1:18100/health > /tmp/gateway-health.json; then break; fi
+          TOKEN='9f4a6c2d8e1b7a305c9d4e6f1a2b8c70d5e3f9a1c6b4d8e2f7a0c3b5d9e1f6a4'
+          cleanup() {
+            docker logs laufapp-smoke >/dev/null 2>&1 || true
+            docker logs laufapp-security >/dev/null 2>&1 || true
+            docker rm -f laufapp-smoke laufapp-security >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker run -d --name laufapp-smoke \
+            -e LAUFAPP_TRUSTED_INGRESS_ONLY=0 \
+            -e LAUFAPP_HEALTH_AUTO_EXPORT_TOKEN="$TOKEN" \
+            -p 18099:8099 -p 18100:8100 \
+            laufapp-ci:${{ github.sha }}
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:18099/api/health > /tmp/laufapp-health.json && curl -fsS -D /tmp/gateway.headers http://127.0.0.1:18100/health > /tmp/gateway-health.json; then break; fi
             sleep 1
           done
           python - <<'PY'
           import json, yaml
           expected=yaml.safe_load(open('laufapp/config.yaml'))['version']
           assert json.load(open('/tmp/laufapp-health.json')) == {'ok': True, 'version': expected}
-          assert json.load(open('/tmp/gateway-health.json')) == {'ok': True, 'version': expected}
+          assert json.load(open('/tmp/gateway-health.json')) == {'ok': True}
           PY
+          grep -qi '^cache-control: no-store' /tmp/gateway.headers
+          grep -qi '^x-content-type-options: nosniff' /tmp/gateway.headers
+          if grep -qi '^server:' /tmp/gateway.headers; then echo 'Gateway leaks Server header' >&2; exit 1; fi
+
           curl -fsS -D /tmp/root.headers -o /tmp/root.html http://127.0.0.1:18099/
           grep -qi '^cache-control: no-store, max-age=0' /tmp/root.headers
           grep -q 'assets/v025.js?v=0.2.5' /tmp/root.html
@@ -71,15 +88,40 @@ jobs:
           assert isinstance(json.load(open('/tmp/races.json')), list)
           assert isinstance(json.load(open('/tmp/marks.json')).get('stored'), list)
           PY
+
           cat > /tmp/hae.json <<'JSON'
-          {"data":{"workouts":[{"id":"ci-hae-run","name":"Running","start":"2026-08-30 08:00:00 +0200","end":"2026-08-30 08:30:00 +0200","duration":1800,"distance":{"qty":5.0,"units":"km"},"avgHeartRate":{"qty":150,"units":"bpm"},"heartRateData":[{"date":"2026-08-30 08:00:01 +0200","Avg":145,"units":"bpm"}],"runningPower":[{"date":"2026-08-30 08:00:01 +0200","qty":300,"units":"W"}],"route":[{"latitude":50.775,"longitude":6.083,"altitude":180,"timestamp":"2026-08-30 08:00:00 +0200"}]}],"metrics":[{"name":"resting_heart_rate","units":"bpm","data":[{"qty":49,"date":"2026-08-30 06:00:00 +0200"}]}]}}
+          {"data":{"workouts":[{"id":"ci-hae-run","name":"Running","start":"2026-08-30 08:00:00 +0200","end":"2026-08-30 08:30:00 +0200","duration":1800,"distance":{"qty":5.0,"units":"km"},"avgHeartRate":{"qty":150,"units":"bpm"},"heartRateData":[{"date":"2026-08-30 08:00:01 +0200","Avg":145,"units":"bpm"}],"runningPower":[{"date":"2026-08-30 08:00:01 +0200","qty":300,"units":"W"}],"route":[{"latitude":50.775,"longitude":6.083,"altitude":180,"timestamp":"2026-08-30 08:00:00 +0200"}]}],"metrics":[{"name":"Resting Heart Rate","units":"bpm","data":[{"qty":49,"date":"2026-08-30 06:00:00 +0200"}]}]}}
           JSON
           test "$(curl -sS -o /tmp/unauth.json -w '%{http_code}' -H 'Content-Type: application/json' --data-binary @/tmp/hae.json http://127.0.0.1:18100/health-auto-export)" = "401"
-          curl -fsS -H 'Authorization: Bearer ci-secret' -H 'Content-Type: application/json' --data-binary @/tmp/hae.json http://127.0.0.1:18100/health-auto-export > /tmp/hae-result.json
-          curl -fsS -H 'X-Laufapp-Token: ci-secret' -H 'Content-Type: application/json' --data-binary @/tmp/hae.json http://127.0.0.1:18100/health-auto-export > /tmp/hae-result-2.json
+          test "$(curl -sS -o /tmp/wrongtype.json -w '%{http_code}' -H "Authorization: Bearer $TOKEN" -H 'Content-Type: text/plain' --data-binary @/tmp/hae.json http://127.0.0.1:18100/health-auto-export)" = "415"
+          curl -fsS -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' --data-binary @/tmp/hae.json http://127.0.0.1:18100/health-auto-export > /tmp/hae-result.json
+          curl -fsS -H "X-Laufapp-Token: $TOKEN" -H 'Content-Type: application/json' --data-binary @/tmp/hae.json http://127.0.0.1:18100/health-auto-export > /tmp/hae-result-2.json
           python - <<'PY'
           import json
           first=json.load(open('/tmp/hae-result.json')); second=json.load(open('/tmp/hae-result-2.json'))
           assert first['ok'] and first['runs_added']==1 and first['samples_added']==2 and first['gps_points_added']==1 and first['health_metrics_added']==1, first
           assert second['ok'] and second['runs_existing']==1 and second['samples_added']==0 and second['gps_points_added']==0 and second['health_metrics_added']==0, second
+          assert 'predictions' not in first and 'version' not in first, first
           PY
+
+          docker rm -f laufapp-smoke >/dev/null
+
+          # Production-mode defense in depth: even if someone accidentally maps
+          # port 8099, forged forwarding/Ingress headers must not bypass the real
+          # 172.30.32.2 Home Assistant peer check.
+          docker run -d --name laufapp-security \
+            -e LAUFAPP_TRUSTED_INGRESS_ONLY=1 \
+            -e LAUFAPP_HEALTH_AUTO_EXPORT_TOKEN="$TOKEN" \
+            -p 28099:8099 \
+            laufapp-ci:${{ github.sha }}
+          for i in $(seq 1 60); do
+            STATUS=$(docker inspect -f '{{.State.Health.Status}}' laufapp-security 2>/dev/null || true)
+            [[ "$STATUS" == "healthy" ]] && break
+            [[ "$STATUS" == "unhealthy" ]] && exit 1
+            sleep 1
+          done
+          test "$(curl -sS -o /tmp/blocked.json -w '%{http_code}' \
+            -H 'X-Forwarded-For: 127.0.0.1' \
+            -H 'X-Hass-Source: core.ingress' \
+            -H 'X-Ingress-Path: /api/hassio_ingress/forged' \
+            http://127.0.0.1:28099/)" = "403"
