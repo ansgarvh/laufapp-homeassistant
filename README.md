@@ -1,33 +1,36 @@
-# Laufapp v0.2.8
+# Laufapp v0.2.9
 
 Private, mobile-first Lauf-PWA für Home Assistant OS. Laufapp verbindet eine lokale Trainings-/Prognoseengine mit Apple-Health-Daten, Health Auto Export und einem optionalen OpenAI-Coach. Die Anwendung ist für einen einzelnen privaten Nutzer ausgelegt.
 
-## Neu in v0.2.8 – Importdiagnose und Laufzeit-Logging
+## Neu in v0.2.9 – Home-Assistant-Ingress-Kompatibilität
 
-v0.2.8 baut funktional auf v0.2.7 auf und ändert weder Trainingslogik noch Datenbankschema. Der Fokus liegt ausschließlich darauf, Fehler beim großen Apple-Health-Import und unerwartete Add-on-Neustarts vollständig nachvollziehbar zu machen.
+v0.2.9 korrigiert die in v0.2.7 zu streng gewordene Ingress-Vertrauensgrenze, ohne den Port 8099 nach außen zu öffnen oder den Header-Spoofing-Schutz zurückzunehmen.
 
 Wesentliche Änderungen:
 
-- **Healthchecks überfluten den normalen Uvicorn-Access-Log nicht mehr:** erfolgreiche `/api/health`- und Gateway-`/health`-Polls werden gefiltert; fehlerhafte Health-Requests und alle anderen API-Aufrufe bleiben sichtbar.
-- **Persistente Importdiagnose pro Job:** Phasenwechsel und Fortschritt werden begrenzt als JSONL unter `/data/import_status/<job-uuid>.diagnostics.jsonl` gespeichert. Die Datei bleibt auch nach Abschluss oder Fehler erhalten.
-- **Vollständige Background-Job-Tracebacks:** Fehler speichern Exception-Typ, letzte Phase, Fortschritt, Detaildaten und den vollständigen Python-Traceback. Zusätzlich wird der Traceback sofort mit Job-ID und Phase in stderr ausgegeben.
-- **Restart-Diagnose:** beim Wiederaufnehmen eines unterbrochenen Imports wird `resumed_after_restart` persistiert.
-- **Prozessursache sichtbar:** `run.sh` protokolliert SIGTERM/SIGINT sowie den PID-/Exitstatus des Main- oder Gateway-Prozesses, bevor das Add-on beendet wird.
-- **Diagnose-API:** `GET /api/apple-health/import-jobs/{job_id}/diagnostics` liefert die persistenten Diagnoseereignisse über den bestehenden Ingress-geschützten Hauptprozess.
-- **Keine Datenbankschemamigration:** bestehende Läufe, Health-Daten, Samples, GPS-Punkte, Bestzeiten, Schuhe, Rennen, Trainingsplan und Einstellungen bleiben unverändert.
+- **Dokumentierter Standard bleibt erhalten:** Verbindungen vom Home-Assistant-Ingress-Proxy `172.30.32.2` werden weiterhin akzeptiert.
+- **Sicherer Kompatibilitätspfad:** Ein anderer Peer wird nur akzeptiert, wenn seine TCP-Adresse im internen Home-Assistant-Netz `172.30.32.0/23` liegt und gleichzeitig ein gültig aussehender `X-Ingress-Path` plus ein authentifizierter Benutzer-/Ingress-Marker vorhanden ist.
+- **Externe Spoofing-Versuche bleiben gesperrt:** Ein externer Client kann auch mit gefälschtem `X-Forwarded-For`, `X-Hass-Source`, `X-Ingress-Path` und `X-Remote-User-Id` den Zugriff nicht freischalten.
+- **Blockierte Zugriffe werden diagnostizierbar:** Der Server protokolliert Peer-IP, Pfad und nur das Vorhandensein relevanter Ingress-Marker über `LAUFAPP_INGRESS_BLOCKED`, ohne Benutzer-IDs auszugeben.
+- **Neue positive Docker-E2E-Prüfung:** Die CI erzeugt ein eigenes `172.30.32.0/23`-Netz und prüft sowohl den dokumentierten `.2`-Proxy als auch den abgesicherten internen Fallback sowie den negativen Fall ohne Authentifizierungsmarker.
+- **Keine Datenbankschemamigration und keine Änderung an Trainingslogik, Apple-Health-Daten, Prognosen oder Health Auto Export.**
 
-## Security-Basis aus v0.2.7
+## Importdiagnose aus v0.2.8
 
-Die Sicherheitsarchitektur aus v0.2.7 bleibt unverändert:
+- Erfolgreiche `/api/health`- und Gateway-`/health`-Polls werden aus dem Uvicorn-Access-Log gefiltert; fehlerhafte Health-Requests und alle anderen API-Aufrufe bleiben sichtbar.
+- Phasenwechsel und Fortschritt jedes Apple-Health-Imports werden als JSONL unter `/data/import_status/<job-uuid>.diagnostics.jsonl` gespeichert.
+- Background-Job-Fehler speichern Exception-Typ, letzte Phase, Fortschritt, Detaildaten und vollständigen Python-Traceback.
+- `run.sh` protokolliert SIGTERM/SIGINT sowie den PID-/Exitstatus von Main- und Gateway-Prozess.
+- Diagnose-API: `GET /api/apple-health/import-jobs/{job_id}/diagnostics`.
 
-- **Home-Assistant-Ingress gegen Spoofing gehärtet:** Port 8099 vertraut nicht auf `X-Forwarded-For`, `X-Hass-Source` oder `X-Ingress-Path`. In Produktion wird ausschließlich die reale TCP-Quelle des Home-Assistant-Ingress-Proxys (`172.30.32.2`) akzeptiert; Loopback ist nur für `/api/health` erlaubt. Uvicorn läuft ohne Proxy-Header-Vertrauen.
-- **Health-Auto-Export-Gateway fail closed:** Port 8100 wird gar nicht gestartet, solange kein ausreichend starker Sync-Token konfiguriert ist.
-- **Starker separater Sync-Token:** mindestens 48 zufällige Zeichen, keine Leerzeichen, timing-resistenter Vergleich. Empfohlen: `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
-- **Request-DoS-Schutz:** Authentifizierung vor Body-Lesen, JSON-only, 16-MiB-Streaminglimit, 120-Sekunden-Body-Timeout, Mengenlimits und begrenzte Gateway-Parallelität.
-- **Write-only Gateway:** die Sync-Antwort enthält keine Trainingsprognosen, persönlichen Read-Daten oder Versionsinformationen.
-- **Replay-/Kollisionsschutz:** idempotenter Reimport, Cross-Source-Deduplizierung und Ablehnung derselben Workout-ID bei widersprüchlichem Start, Distanz oder Dauer.
-- **Apple-Health-ZIP/XML gehärtet:** ZIP-Bomb-Limits, Größen-/Dateianzahlgrenzen, GPX-Punkt- und Koordinatenlimits sowie `defusedxml` gegen Entity Expansion/externe XML-Referenzen.
-- **Security-CI:** `pip-audit`, Bandit-Gate, gepinnte GitHub-Actions, hostile-ingress-Docker-Test und die bestehende vollständige Regression sind Release-Voraussetzung.
+## Security-Basis
+
+- Port **8099** bleibt Home-Assistant-Ingress-only und ist in `config.yaml` nicht als Host-Port veröffentlicht.
+- Port **8100** bleibt standardmäßig unveröffentlicht und startet nur mit einem starken Health-Auto-Export-Token.
+- Uvicorn läuft ohne Proxy-Header-Vertrauen.
+- Health Auto Export authentifiziert vor dem Body-Lesen, ist JSON-only, besitzt Größen-/Timeout-/Mengenlimits und gibt keine persönlichen Read-Daten zurück.
+- Der klassische Apple-Health-ZIP/XML-Pfad behält ZIP-Bomb-Limits, GPX-Grenzen und `defusedxml`-Schutz.
+- Security-CI umfasst `pip-audit`, Bandit-Gate, externe Spoofing-Negativtests und positive Home-Assistant-Ingress-Simulation.
 
 Ausführliche Details und verbleibende Risiken stehen in `SECURITY.md`.
 
@@ -48,12 +51,6 @@ Empfohlene Lauf-Automation in Health Auto Export:
 
 Für Ruhepuls, HRV, Gewicht, VO₂max und Schlaf empfiehlt sich eine zweite, weniger häufige Health-Metrics-Automation.
 
-## Netzwerk
-
-Port **8099** bleibt ausschließlich Home Assistant Ingress. Er darf nicht als normaler Host-Port veröffentlicht werden.
-
-Port **8100** ist der minimale Health-Auto-Export-Gateway und ist in `config.yaml` ebenfalls standardmäßig **nicht** veröffentlicht. Er startet nur mit einem starken Token. Für Nutzung außerhalb des Heimnetzes muss er über ein **verschlüsseltes VPN (z. B. Tailscale/WireGuard) oder einen korrekt abgesicherten HTTPS-Reverse-Proxy** erreichbar gemacht werden. Eine unverschlüsselte Internet-Portweiterleitung ist ausdrücklich nicht vorgesehen.
-
 ## Bestehende Funktionen
 
 - Heute: Planfokus, Zielzeit, Prognose, nächste Einheit, Recovery-Signale und Coach-Vorschläge
@@ -68,7 +65,7 @@ Port **8100** ist der minimale Health-Auto-Export-Gateway und ist in `config.yam
 
 ## Persistenz
 
-Benutzerdaten liegen im persistenten Home-Assistant-`/data`-Bereich. v0.2.8 benötigt **keine Datenbankschemamigration**; bestehende Läufe, Health-Daten, Bestzeiten, Schuhe, Rennen, Trainingsplan, Einstellungen und Coach-Daten bleiben erhalten. Diagnose-JSONL-Dateien werden zusätzlich im bereits bestehenden Verzeichnis `/data/import_status` abgelegt.
+Benutzerdaten liegen im persistenten Home-Assistant-`/data`-Bereich. v0.2.9 benötigt **keine Datenbankschemamigration**; bestehende Läufe, Health-Daten, Bestzeiten, Schuhe, Rennen, Trainingsplan, Einstellungen und Coach-Daten bleiben erhalten.
 
 ## OpenAI
 
@@ -76,7 +73,7 @@ Der OpenAI-API-Key bleibt serverseitig in der Home-Assistant-App-Konfiguration u
 
 ## Release-Prüfungen
 
-Vor Merge laufen Python-Compilecheck, JavaScript-Syntaxcheck, vollständige Pytest-Regression, 16-Wochen-Marathonsimulation, neun randomisierte Läuferprofile, `pip-audit`, Bandit-Gate, Docker-Build sowie Docker-E2E für Health Auto Export und eine absichtlich feindliche Ingress-Spoofing-Simulation. v0.2.8 ergänzt Regressionstests für persistente Importdiagnose, vollständige Tracebacks, Wiederaufnahme nach Neustart und Shell-Syntax des Prozess-Supervisors.
+Vor Merge laufen Python-Compilecheck, JavaScript-Syntaxcheck, vollständige Pytest-Regression, 16-Wochen-Marathonsimulation, neun randomisierte Läuferprofile, `pip-audit`, Bandit-Gate, Docker-Build, Health-Auto-Export-E2E, externe Ingress-Spoofing-Negativtests sowie die neue positive Home-Assistant-Ingress-Netzsimulation.
 
 Statisch/isoliert und in Linux/Docker getestet. Die echte Home-Assistant-/Supervisor-/Nabu-Casa-/VPN-/Health-Auto-Export-iPhone-Integration muss nach Installation auf dem Beelink lokal verifiziert werden.
 
@@ -88,7 +85,7 @@ export LAUFAPP_DATA_DIR=/tmp/laufapp-data
 export LAUFAPP_TRANSFER_DIR=/tmp/laufapp-transfer
 export LAUFAPP_TRUSTED_INGRESS_ONLY=0
 export LAUFAPP_HEALTH_AUTO_EXPORT_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
-uvicorn main_v028:app --host 127.0.0.1 --port 8099 --no-proxy-headers
+uvicorn main_v029:app --host 127.0.0.1 --port 8099 --no-proxy-headers
 ```
 
-Weitere Details: `SECURITY.md`, `RELEASE_NOTES_v0.2.8.md`, `TRAINING_ENGINE.md`, `MIGRATIONS.md`.
+Weitere Details: `SECURITY.md`, `RELEASE_NOTES_v0.2.9.md`, `TRAINING_ENGINE.md`, `MIGRATIONS.md`.
