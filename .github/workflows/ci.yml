@@ -95,7 +95,7 @@ jobs:
           PY
 
           cat > /tmp/hae.json <<'JSON'
-          {"data":{"workouts":[{"id":"ci-hae-run","name":"Running","start":"2026-08-30 08:00:00 +0200","end":"2026-08-30 08:30:00 +0200","duration":1800,"distance":{"qty":5.0,"units":"km"},"avgHeartRate":{"qty":150,"units":"bpm"},"heartRateData":[{"date":"2026-08-30 08:00:01 +0200","Avg":145,"units":"bpm"}],"runningPower":[{"date":"2026-08-30 08:00:01 +0200","qty":300,"units":"W"}],"route":[{"latitude":50.775,"longitude":6.083,"altitude":180,"timestamp":"2026-08-30 08:00:00 +0200"}]}],"metrics":[{"name":"Resting Heart Rate","units":"bpm","data":[{"qty":49,"date":"2026-08-30 06:00:00 +0200"}]}]}}
+          {"data":{"workouts":[{"id":"ci-hae-run","name":"Outdoor Ausführen","start":"2026-08-30 08:00:00 +0200","end":"2026-08-30 08:30:00 +0200","duration":1800,"distance":{"qty":5.0,"units":"km"},"avgHeartRate":{"qty":150,"units":"bpm"},"heartRateData":[{"date":"2026-08-30 08:00:01 +0200","Avg":145,"units":"bpm"}],"runningPower":[{"date":"2026-08-30 08:00:01 +0200","qty":300,"units":"W"}],"route":[{"latitude":50.775,"longitude":6.083,"altitude":180,"timestamp":"2026-08-30 08:00:00 +0200"}]}],"metrics":[{"name":"Resting Heart Rate","units":"bpm","data":[{"qty":49,"date":"2026-08-30 06:00:00 +0200"}]}]}}
           JSON
           test "$(curl -sS -o /tmp/unauth.json -w '%{http_code}' -H 'Content-Type: application/json' --data-binary @/tmp/hae.json http://127.0.0.1:18100/health-auto-export)" = "401"
           test "$(curl -sS -o /tmp/wrongtype.json -w '%{http_code}' -H "Authorization: Bearer $TOKEN" -H 'Content-Type: text/plain' --data-binary @/tmp/hae.json http://127.0.0.1:18100/health-auto-export)" = "415"
@@ -110,7 +110,7 @@ jobs:
           PY
 
           cat > /tmp/hae-relay.json <<'JSON'
-          {"data":{"workouts":[{"id":"ci-nabu-relay-run","name":"Running","start":"2026-08-30 10:00:00 +0200","end":"2026-08-30 10:30:00 +0200","duration":1800,"distance":{"qty":5.0,"units":"km"},"heartRateData":[{"date":"2026-08-30 10:00:01 +0200","Avg":146,"units":"bpm"}],"runningPower":[{"date":"2026-08-30 10:00:01 +0200","qty":301,"units":"W"}],"route":[{"latitude":50.775,"longitude":6.083,"altitude":180,"timestamp":"2026-08-30 10:00:00 +0200"}]}],"metrics":[]}}
+          {"data":{"workouts":[{"id":"ci-nabu-relay-run","name":"Outdoor Ausführen","start":"2026-08-30 10:00:00 +0200","end":"2026-08-30 10:30:00 +0200","duration":1800,"distance":{"qty":5.0,"units":"km"},"heartRateData":[{"date":"2026-08-30 10:00:01 +0200","Avg":146,"units":"bpm"}],"runningPower":[{"date":"2026-08-30 10:00:01 +0200","qty":301,"units":"W"}],"route":[{"latitude":50.775,"longitude":6.083,"altitude":180,"timestamp":"2026-08-30 10:00:00 +0200"}]}],"metrics":[]}}
           JSON
           test "$(curl -sS -o /tmp/relay-bearer.json -w '%{http_code}' -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' --data-binary @/tmp/hae-relay.json http://127.0.0.1:18100/home-assistant-relay)" = "401"
           docker run --rm --network ha-relay-test \
