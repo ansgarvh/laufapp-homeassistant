@@ -146,7 +146,13 @@ class FakeHass:
 
 def test_large_payload_over_template_ceiling_is_forwarded_byte_for_byte(monkeypatch):
     relay, _ = _load_component(monkeypatch)
-    body = b"x" * 300_000
+    # Realistic valid JSON that is deliberately larger than Home Assistant's
+    # 262144-character automation-template output ceiling.
+    body = (
+        b'{"data":{"workouts":[],"metrics":[]},"synthetic_detail":"'
+        + b"x" * 300_000
+        + b'"}'
+    )
     request = FakeRequest(body)
     session = FakeSession()
     relay.async_get_clientsession = lambda _hass: session
