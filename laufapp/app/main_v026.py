@@ -58,11 +58,19 @@ async def process_health_auto_export_request(
         raise HTTPException(status_code=400, detail="Ungültiges JSON.") from exc
     try:
         with db_conn() as c:
-            result = hae.ingest(
-                c,
-                payload,
-                core.legacy_training,
-                previous.previous.sync_apple_health_best_marks,
+            result = hae.ingest(c, payload, core.legacy_training, None)
+            # Keep v0.2.4 PB detection compatible: it intentionally recognizes
+            # only runs whose source starts with ``apple_health``.
+            c.execute(
+                "UPDATE runs SET source='apple_health_hae' WHERE source='health_auto_export'"
+            )
+            result["performance_marks_detected"] = int(
+                previous.previous.sync_apple_health_best_marks(c, core.legacy_training, 24)
+            ) if (result["runs_added"] or result["runs_existing"]) else 0
+            c.execute(
+                "INSERT INTO settings(key,value) VALUES('health_auto_export_last_result',?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                (json.dumps(result, ensure_ascii=False),),
             )
             predictions = core.legacy_training.predict_all(c)
     except ValueError as exc:
