@@ -13,6 +13,7 @@ from fastapi import Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 import health_auto_export_v027 as hae
+import health_import_hardening_v027 as health_import_hardening
 import main_v026 as previous
 from db import db_conn
 from performance_marks_v024 import sync_apple_health_best_marks
@@ -32,6 +33,11 @@ core.db_module.APP_VERSION = APP_VERSION
 core.legacy.APP_VERSION = APP_VERSION
 core.legacy.app.version = APP_VERSION
 core.training.VERSION = APP_VERSION
+
+# The existing background-import function resolves these module globals at run
+# time, so installing the narrow wrappers also protects queued/retried imports
+# without replacing the tested import-job machinery.
+health_import_hardening.install()
 
 app = previous.app
 
