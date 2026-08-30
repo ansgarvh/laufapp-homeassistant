@@ -1,54 +1,75 @@
-# Sicherheitskonzept – Laufapp v0.1.4
+# Sicherheitskonzept – Laufapp v0.2.7
 
-## Lokale Datenhaltung
+Laufapp ist eine private Home-Assistant-Anwendung. Dieses Dokument beschreibt die tatsächlich implementierten Schutzgrenzen. Es ist keine Behauptung absoluter Sicherheit; reale Home-Assistant-, Netzwerk- und iPhone-Integration müssen auf dem Zielsystem zusätzlich verifiziert werden.
 
-Trainingsdaten, Wettkämpfe, Schuhe, Health-Metriken, detaillierte Laufmesswerte, GPS-Punkte, Plan und Chat-Historie werden in einer SQLite-Datenbank unter `/data` gespeichert. Dieses Verzeichnis ist vom Programmcode getrennt und bleibt bei normalen Updates derselben Home-Assistant-App erhalten.
+## Netzwerk- und Vertrauensgrenzen
 
-## Datenbankmigration
+Die Hauptanwendung auf Port 8099 ist ausschließlich für Home Assistant Ingress vorgesehen. Der Port ist in `config.yaml` standardmäßig nicht auf den Host veröffentlicht. Zusätzlich prüft die Anwendung in Produktion die **reale TCP-Quelladresse**: nur der Home-Assistant-Ingress-Proxy `172.30.32.2` darf auf die UI/API zugreifen. Loopback ist ausschließlich für `/api/health` zugelassen. `X-Forwarded-For`, `X-Hass-Source` und `X-Ingress-Path` werden nicht als Vertrauenssignal verwendet. Uvicorn läuft mit `--no-proxy-headers`, sodass gefälschte Forwarding-Header die Peer-Adresse nicht überschreiben können.
 
-- Datenbankschema wird explizit versioniert.
-- Vor jeder Schema-Migration wird eine SQLite-Online-Sicherung unter `/data/backups/` erzeugt und mit `PRAGMA integrity_check` geprüft.
-- Migrationen sind additiv; bestehende Nutzertabellen werden nicht gelöscht.
-- Schlägt eine Migration fehl, wird die Datenbank aus dem Vorab-Backup wiederhergestellt und der App-Start bricht ab.
-- Eine App, deren unterstütztes Schema älter als die vorhandene Datenbank ist, verweigert den Downgrade.
+Der optionale Health-Auto-Export-Gateway läuft getrennt auf Port 8100 und stellt nur `/health` und `POST /health-auto-export` bereit. OpenAPI-/Swagger-/ReDoc-Endpunkte sind deaktiviert. Port 8100 wird **gar nicht gestartet**, solange kein ausreichend starker Sync-Token konfiguriert ist. Auch Port 8100 ist standardmäßig nicht auf den Home-Assistant-Host veröffentlicht.
 
-## Apple Health
+**Port 8100 niemals als unverschlüsseltes HTTP ins Internet weiterleiten.** Für Nutzung außerhalb des Heimnetzes ist ein verschlüsseltes VPN wie WireGuard/Tailscale oder ein korrekt konfigurierter HTTPS-Reverse-Proxy mit TLS, Verbindungs-/Request-Timeouts und sinnvoller Rate-Begrenzung erforderlich.
 
-- Es werden nur für Lauftraining/Recovery relevante Datentypen ausgewertet.
-- Importierte Daten werden auf die letzten exakt 24 Kalendermonate begrenzt.
-- Upload-Limit: 2 GB; `export.xml` maximal 8 GB entpackte Größe.
-- ZIP-Pfade werden validiert; `export.xml` wird aus dem Archiv gestreamt, statt den gesamten Export unkontrolliert zu entpacken.
-- Hintergrundjobs speichern die hochgeladene Datei lokal unter `/data/imports/`. Nach erfolgreichem Import wird sie gelöscht. Bei einem Fehler bleibt sie zunächst lokal erhalten, damit der Nutzer den Import wiederholen kann.
-- Die eigentlichen Health-Daten werden in einer Datenbanktransaktion importiert. Ein Parser-/Datenfehler hinterlässt keinen halb importierten Datensatz.
-- Wiederholte Exporte werden über externe IDs/Fingerprints dedupliziert.
-- Zeitreihen und GPS werden nur gespeichert, soweit der Apple-Export sie tatsächlich enthält.
+## Health Auto Export
 
-## Local-App → GitHub-App Transfer
+- eigener, von OpenAI- und Home-Assistant-Zugangsdaten getrennter Token
+- mindestens 48 Zeichen, höchstens 256 Zeichen, keine Leerzeichen, Mindestdiversität; empfohlen wird ein kryptografisch zufälliger Token
+- timing-resistenter Vergleich über `hmac.compare_digest`
+- Authentifizierung erfolgt **vor** dem Lesen des Request-Bodys
+- nur JSON-Content-Type wird akzeptiert
+- maximal 16 MiB pro Request; Limit wird bereits während des Streamings erzwungen
+- maximales Body-Zeitfenster 120 Sekunden als Schutz gegen sehr langsame Requests
+- Limits für Workoutzahl, Messpunkte, GPS-Punkte und Health-Metriken
+- Workout-ID-Kollisionen mit abweichendem Start, Distanz oder Dauer werden abgelehnt
+- Reimporte und Cross-Source-Übergänge vom klassischen Apple-Health-Import werden dedupliziert
+- die Gateway-Antwort enthält keine Prognosen, Trainingsdaten oder Versionsinformationen
+- Gateway-Antworten erhalten `Cache-Control: no-store`, `X-Content-Type-Options: nosniff` und `Referrer-Policy: no-referrer`; der Uvicorn-Server-Header ist deaktiviert
+- die Parallelität des Gateways ist begrenzt
 
-Home Assistant vergibt einer Local App und einer App aus einem Custom Repository unterschiedliche persistente `/data`-Bereiche. Für den einmaligen Umzug kann der Nutzer explizit eine Datenbankkopie unter `/share/laufapp-transfer/` vorbereiten.
+## Apple-Health-ZIP/XML-Import
 
-- Quelle und Ziel werden vor bzw. nach dem Kopieren mit SQLite `integrity_check` geprüft.
-- Die GitHub-App übernimmt die Kopie nur in einen **frischen** `/data`-Bereich; eine bereits vorhandene Datenbank wird niemals überschrieben.
-- Nach erfolgreicher Übernahme löscht die neue App die Transferkopie und Metadatei.
-- Die Transferdateien werden mit restriktiven Dateirechten angelegt.
+Der klassische ZIP/XML-Import bleibt als Historien- und Backup-Pfad erhalten und ist nur hinter Home Assistant Ingress erreichbar.
 
-## OpenAI
+- Upload wird gestreamt und ist auf 2 GiB begrenzt
+- ZIP wird nicht per `extractall` entpackt; `export.xml` und GPX-Dateien werden direkt aus dem Archiv gestreamt
+- maximal 20.000 ZIP-Einträge
+- genau eine `export.xml` erforderlich
+- verschlüsselte ZIP-Einträge werden abgelehnt
+- entpackte `export.xml` maximal 8 GiB
+- Kompressionsverhältnis für `export.xml` und GPX wird begrenzt, um Dekompressionsbomben abzuwehren
+- GPX-Gesamt- und Einzeldateigrößen werden begrenzt
+- maximal 250.000 GPS-Punkte pro Route
+- GPS-Koordinaten und Höhenwerte werden plausibilisiert
+- XML/GPX wird mit `defusedxml` geparst; Entity Expansion und externe XML-Referenzen sind gesperrt
+- Health-Daten werden transaktional importiert; Parserfehler hinterlassen keinen halb importierten Datensatz
+- wiederholte Exporte werden über externe IDs/Fingerprints dedupliziert
 
-- API-Key ausschließlich serverseitig über `/data/options.json` oder `OPENAI_API_KEY`.
-- Der Key wird über keine Laufapp-API an das Frontend zurückgegeben.
-- Screenshots werden im Speicher verarbeitet und nicht als Bilddatei dauerhaft gespeichert.
-- Der Coach erhält einen kompakten Trainingskontext statt pauschal den gesamten 24-Monats-Rohdatensatz.
-- Wissenschaftliche Websuche ist separat abschaltbar.
-- Das monatliche Budget stoppt weitere KI-Aufrufe, sobald das konfigurierte Limit erreicht ist.
+## Datenhaltung und Secrets
 
-## Trainingsplan-Schutz
+Trainingsdaten, Wettkämpfe, Schuhe, Health-Metriken, Laufzeitreihen, GPS-Punkte, Plan und Chat-Historie liegen in SQLite unter `/data`. Der Home-Assistant-App-Code liegt getrennt im Container-Image. Vor Datenbankschemamigrationen wird ein integrity-geprüftes Backup erzeugt; Downgrades auf ein nicht unterstütztes älteres Schema werden blockiert.
 
-Die KI kann keinen Plan direkt verändern. Sie kann nur validierte Vorschläge erzeugen, die der Nutzer explizit übernehmen oder ablehnen muss. Serverseitige Plausibilitätsgrenzen schützen unter anderem vor Doppelbelegung, extremen Distanzsteigerungen und problematischen Abständen belastender Einheiten.
+`openai_api_key` und `health_auto_export_token` sind Home-Assistant-Passwortoptionen und werden nicht durch die Laufapp-API an das Frontend ausgegeben. Dateierzeugung erfolgt mit restriktivem `umask 077`.
 
-## Netzwerk
+## OpenAI / KI
 
-Der Port 8099 wird standardmäßig nicht auf dem Home-Assistant-Host veröffentlicht. Im Produktionscontainer ist direkter externer Zugriff blockiert; Home-Assistant-Ingress und der lokale Container-Healthcheck bleiben erlaubt. Damit ist für den normalen Fernzugriff keine FritzBox-Portfreigabe erforderlich.
+Der OpenAI-Key bleibt serverseitig. Der Coach erhält nur den für die konkrete Analyse zusammengestellten Trainingskontext. Screenshots werden nur nach expliziter Nutzeraktion an die OpenAI API gesendet und nicht dauerhaft als Bild gespeichert. KI-Vorschläge können den Trainingsplan nicht eigenständig verändern: Änderungen werden serverseitig validiert und müssen vom Nutzer ausdrücklich bestätigt werden.
 
-## Testgrenze
+## Browser / XSS
 
-Python/JavaScript, Datenbankmigration, Rollback, Importjobs, Health-Parser, Transferpfad und vollständiger synthetischer Workflow werden isoliert getestet. Diese statischen und synthetischen Prüfungen sind ausdrücklich keine echten Home-Assistant-Integrationstests. Docker-/Supervisor-Build, großer Upload über echten Home-Assistant-Ingress und echte OpenAI-Aufrufe mit dem persönlichen API-Key müssen im Release-Prozess beziehungsweise Zielsystem separat verifiziert werden.
+Die dynamischen Frontendpfade wurden auf Stored/Reflected XSS geprüft. Nutzer- und Modelldaten wie Coach-Antworten, Rennnamen, Notizen, Leistungslabels und Quellen werden vor HTML-Einfügung escaped. Externe Quellenlinks werden nur für `http:`/`https:` akzeptiert und mit `noopener noreferrer` geöffnet. Im geprüften Rendering-Pfad wurde keine offene Stored-XSS-Lücke gefunden.
+
+## Supply Chain und CI
+
+Direkte Runtime-Abhängigkeiten sind auf geprüfte Versionen gepinnt. `pip-audit` blockiert Releases bei bekannten Python-Abhängigkeitsschwachstellen. Der FastAPI-/Starlette-Stack wurde im Security-Review auf gepatchte Versionen aktualisiert. Zusätzlich läuft Bandit über den Python-Code; nur exakt dokumentierte Legacy-Findings mit geprüfter Nicht-Sicherheitsbedeutung dürfen den Review-Gate passieren, neue Medium/High-Findings blockieren die CI.
+
+GitHub-Actions werden nicht über bewegliche Major-Tags geladen, sondern auf geprüfte Commit-SHAs gepinnt. Workflow-Rechte sind auf `contents: read` begrenzt.
+
+## Bewusst verbleibende Risiken
+
+Der Container läuft weiterhin im Home-Assistant-App-Modell mit den dort nötigen Dateirechten und besitzt für den bestehenden Repository-Transferpfad `/share:rw`. Eine Umstellung auf einen strikt nicht privilegierten Container beziehungsweise Entfernung des Share-Mounts würde das Home-Assistant-Persistenz-/Migrationsverhalten beeinflussen und wird ohne realen Supervisor-Test nicht vorgenommen. Diese Punkte sind lokale Host-/Container-Risiken, keine Begründung für eine öffentliche Portfreigabe.
+
+Ein gültiger Health-Auto-Export-Token erlaubt weiterhin das **Schreiben** plausibler Health-Daten. Deshalb muss er wie ein Passwort behandelt und bei Verdacht sofort rotiert werden. Der Gateway ist bewusst write-only, damit derselbe Token nicht zum Auslesen persönlicher Laufdaten genutzt werden kann.
+
+## Release-Grenze
+
+Automatisiert geprüft werden Compile/Syntax, Regressionstests, Trainingssimulationen, Dependency-Audit, Bandit-Gate, Docker-Build, authentifizierter und unauthentifizierter Health-Auto-Export, idempotenter Reimport sowie ein absichtlich veröffentlichter Test-Port 8099 mit gefälschten Proxy-/Ingress-Headern. Die reale Home-Assistant-Ingress-Quelle, der reale Supervisor-Port-Mapping-Zustand, VPN/HTTPS-Konfiguration und Health Auto Export auf dem iPhone müssen nach Installation lokal verifiziert werden.
