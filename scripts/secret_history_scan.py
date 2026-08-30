@@ -14,38 +14,46 @@ PATTERNS = {
         r"https://[A-Za-z0-9_-]{12,}\.ui\.nabu\.casa/api/webhook/[A-Za-z0-9_-]{20,}"
     ),
 }
+GREP_PATTERN = (
+    r"sk-(proj-)?[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{20,}|"
+    r"github_pat_[A-Za-z0-9_]{20,}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|"
+    r"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}|"
+    r"https://[A-Za-z0-9_-]{12,}\.ui\.nabu\.casa/api/webhook/[A-Za-z0-9_-]{20,}"
+)
 
-# Literal examples used by tests are intentionally not generic secret patterns.
-# Placeholders containing '<...>' or REPLACE_WITH are not matched by PATTERNS.
 
-
-def _git(*args: str) -> str:
-    result = subprocess.run(
+def _git(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
         ["git", *args],
-        check=True,
+        check=check,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
         encoding="utf-8",
         errors="replace",
     )
-    return result.stdout
 
 
 def main() -> int:
-    commits = [line.strip() for line in _git("rev-list", "--all").splitlines() if line.strip()]
+    commits = [
+        line.strip()
+        for line in _git("rev-list", "--all").stdout.splitlines()
+        if line.strip()
+    ]
     findings: list[str] = []
     seen: set[tuple[str, str, str]] = set()
 
     for commit in commits:
-        files = [line for line in _git("ls-tree", "-r", "--name-only", commit).splitlines() if line]
-        for path in files:
-            if path.endswith((".png", ".jpg", ".jpeg", ".ico", ".zip")):
+        result = _git("grep", "-I", "-n", "-E", GREP_PATTERN, commit, "--", ".", check=False)
+        if result.returncode not in {0, 1}:
+            print(result.stderr, file=sys.stderr)
+            return 2
+        for line in result.stdout.splitlines():
+            # git grep output is <commit>:<path>:<line>:<content>.
+            parts = line.split(":", 3)
+            if len(parts) != 4:
                 continue
-            try:
-                content = _git("show", f"{commit}:{path}")
-            except subprocess.CalledProcessError:
-                continue
+            _commit_ref, path, _line_no, content = parts
             for name, pattern in PATTERNS.items():
                 match = pattern.search(content)
                 if not match:
