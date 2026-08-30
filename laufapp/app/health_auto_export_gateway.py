@@ -6,7 +6,7 @@ only a health endpoint and the authenticated HAE ingest endpoint on port 8100.
 
 from fastapi import FastAPI, Header, Request
 
-from main_v027 import APP_VERSION, process_health_auto_export_request
+from main_v028 import APP_VERSION, process_health_auto_export_request
 
 app = FastAPI(
     title="Laufapp Health Sync Gateway",
