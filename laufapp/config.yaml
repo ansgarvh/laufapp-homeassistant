@@ -1,7 +1,7 @@
 name: "Laufapp"
-version: "0.3.0"
+version: "0.2.6"
 slug: "laufapp"
-description: "Privater datenbasierter Laufcoach als PWA mit Apple-Health-Import und optionalem OpenAI-Coach."
+description: "Privater datenbasierter Laufcoach als PWA mit Apple-Health-Import, Health Auto Export und optionalem OpenAI-Coach."
 arch:
   - amd64
 startup: application
@@ -15,12 +15,16 @@ panel_title: Laufapp
 panel_admin: true
 ports:
   8099/tcp: null
+  8100/tcp: null
 ports_description:
-  8099/tcp: "Optionaler direkter Webzugriff (standardmäßig deaktiviert; Ingress verwenden)"
+  8099/tcp: "Optionaler direkter Webzugriff (deaktiviert lassen; Ingress verwenden)"
+  8100/tcp: "Optionaler Health-Auto-Export-Sync-Gateway (nur LAN/VPN, tokenpflichtig)"
 options:
   openai_api_key: ""
+  health_auto_export_token: ""
 schema:
   openai_api_key: password
+  health_auto_export_token: password
 map:
   - share:rw
 backup: hot
