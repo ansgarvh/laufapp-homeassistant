@@ -1,15 +1,14 @@
 """Minimal Health Auto Export gateway for private and relayed sync.
 
 The main Laufapp UI remains Home-Assistant-Ingress-only. This process exposes
-only health/write endpoints on port 8100. In v0.2.10 Home Assistant can relay a
-Nabu Casa cloud webhook to the dedicated ``/home-assistant-relay`` endpoint over
-the Supervisor-internal app network; the same strong Laufapp token is still
-required on that internal hop.
+only health/write endpoints on port 8100. Home Assistant can forward HAE JSON to
+the dedicated ``/home-assistant-relay`` endpoint over the Supervisor-internal
+app network; the same strong Laufapp token is required on that internal hop.
 """
 
 from fastapi import FastAPI, Header, Request
 
-from main_v0210 import APP_VERSION, process_health_auto_export_request
+from main_v0211 import APP_VERSION, process_health_auto_export_request
 
 app = FastAPI(
     title="Laufapp Health Sync Gateway",
@@ -49,9 +48,9 @@ async def home_assistant_relay(
     request: Request,
     x_laufapp_token: str | None = Header(default=None, alias="X-Laufapp-Token"),
 ):
-    """Receive JSON relayed by Home Assistant from a Nabu Casa cloud webhook.
+    """Receive JSON relayed by Home Assistant from Nabu Casa remote access.
 
-    The public cloudhook credential is deliberately not accepted as Laufapp
+    The public webhook credential is deliberately not accepted as Laufapp
     authentication. Home Assistant must add the separate strong Laufapp token
     on this internal hop. Bearer authentication is intentionally not exposed on
     this dedicated route so the documented relay has one unambiguous contract.
