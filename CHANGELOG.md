@@ -1,5 +1,17 @@
 # Laufapp Changelog
 
+## v0.2.10 – 2026-08-30
+
+- Kontinuierliche Health-Auto-Export-Synchronisation kann nun über **Nabu Casa Cloud Webhooks** erfolgen: iPhone → HTTPS-Cloudhook → Home Assistant → Supervisor-internes App-Netz → Laufapp. Für diesen Betriebsweg sind weder dauerhaftes VPN auf dem iPhone noch eine Router-Portfreigabe nötig.
+- Neuer dedizierter interner Gateway-Endpunkt `POST /home-assistant-relay`. Er akzeptiert ausschließlich den separaten starken `X-Laufapp-Token`; ein Bearer-Token allein wird bewusst abgewiesen. Der bestehende direkte `/health-auto-export`-Pfad bleibt kompatibel erhalten.
+- Port 8100 bleibt in der Add-on-Konfiguration standardmäßig **unveröffentlicht**. Home Assistant adressiert den Relay-Pfad über den Supervisor-internen DNS-Namen `c87ed7df-laufapp`; nach erfolgreichem realem Cloudhook-Test soll eine temporäre Host-Port-Zuordnung wieder entfernt werden.
+- Home-Assistant-Beispiele für `rest_command`, Webhook-Automation und `secrets.yaml` ergänzt. Cloudhook-ID und Laufapp-Token bleiben getrennte Geheimnisse; der reale Token wird nicht in Automation oder Repository eingebettet.
+- Für den Nabu-Casa-Pfad wird ein überlappendes **„Previous 7 Days / Letzte 7 Tage“**-Fenster empfohlen. Damit kann ein temporärer Fehler nach der Webhook-Annahme beim nächsten Lauf nachgeholt werden; bestehende Workout-/Sample-/GPS-/Health-Metric-Deduplizierung hält Wiederholungen idempotent.
+- Die Beispielautomation verarbeitet HAE-Batches seriell als `mode: queued` mit maximal 50 Einträgen. Erfolgreiche Relay-Imports erzeugen nur einen datensparsamen `LAUFAPP_HAE_RELAY_OK`-Marker mit Importzählern, ohne Token, Cloudhook-ID oder persönliche Messwerte.
+- Keine Datenbankschemamigration und keine Änderung an Trainingslogik, Prognosen, Bestzeiten, Apple-Health-Historienimport oder v0.2.9-Ingress-Sicherheitslogik.
+- Validierung des vorletzten Branch-Stands: **119/119 Pytests**, Python-Compilecheck, JavaScript-Syntax, Dependency-Audit, 16-Wochen-Marathonsimulation, neun randomisierte Läuferprofile, Docker-Build, direkter HAE-E2E, interner Nabu-Relay-E2E, Ingress-Sicherheits-E2E und Gateway-fail-closed erfolgreich; Security-Workflow ebenfalls erfolgreich. Der finale Release-Metadatenstand wird vor Merge erneut vollständig geprüft.
+- Statisch/isoliert und in Linux/Docker getestet; reale Home-Assistant-/Supervisor-/Nabu-Casa-/Health-Auto-Export-iPhone-Integration muss lokal auf dem Beelink verifiziert werden.
+
 ## v0.2.9 – 2026-08-30
 
 - Browser-/Ingress-Erreichbarkeit korrigiert: Der in v0.2.7 eingeführte ausschließlich auf `172.30.32.2` fixierte Ingress-Guard erhält einen eng begrenzten Kompatibilitätspfad für reale Home-Assistant-interne Peers.
@@ -92,7 +104,6 @@
 - Keine Datenbankschemamigration.
 
 ## v0.2.0 – 2026-08-29
-
 - Mehrere zukünftige Wettkämpfe können unter **Einstellungen → Rennen** gepflegt, bearbeitet und gelöscht werden. Bestehende v0.1.9-Wettkämpfe werden kompatibel als A-Rennen behandelt.
 - **A-Rennen** steuern den Trainingsblock vollständig; das jeweils nächste zukünftige A-Rennen ist der Planfokus, nach dessen Rennwoche übernimmt automatisch das nächste A-Rennen.
 - **B-Rennen** lösen keinen Taper und keine Änderung der vorherigen Trainingswochen aus. In ihrer Rennwoche ersetzen sie ausschließlich den Longrun; die übrigen Trainingseinheiten bleiben in einer normalen konfliktfreien Woche unverändert.
@@ -127,7 +138,6 @@
 - Keine Datenbankschemaänderung; Apple-Health-Daten, Läufe, Schuhe, Wettkämpfe, Einstellungen und manuelle Planänderungen bleiben erhalten.
 
 ## v0.1.8 – 2026-08-28
-
 - Dedizierte mobile Einstellungen-Navigation mit persistenten, serverseitig validierten Planungslimits.
 - Deterministische Engine unterstützt 3–7 Lauftage, 1–3 Qualitätseinheiten, automatische/manuelle Wochenobergrenze und distanzabhängige Longrun-Obergrenzen (Marathon: 35 km). Intensive Longruns verbrauchen dabei ein Qualitätsbudget.
 - Planneuberechnung aus Woche entfernt und nach Einstellungen verschoben; stale Hinweis verlinkt dorthin.
