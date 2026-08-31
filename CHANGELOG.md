@@ -1,5 +1,15 @@
 # Laufapp Changelog
 
+## v0.2.15 – 2026-08-31
+
+- Wochen-Navigation vollständig an den Datumsbereich verschoben: linker/rechter Pfeil und Wochenzeitraum stehen nun gemeinsam direkt oberhalb der sieben Tagesfelder.
+- Rechten Pfeil von „Aktuelle Woche“ entkoppelt, damit beide Navigationspfeile auf derselben Höhe wie der Datumsbereich bleiben.
+- Absolviert-Markierung korrigiert: Wochenkarten erhalten Statusklasse und grünen Haken direkt aus `workout.status == completed`; die aktive MutationObserver-/Textauswertung aus v0.2.14 wird nicht mehr geladen.
+- `app.js` wird mit v0.2.15 cache-busted; Service-Worker-Cache und aktive Assetliste entsprechend aktualisiert.
+- Neue API-Regression prüft persistenten Status-Roundtrip `planned/completed/skipped`; neue UI-Regression prüft DOM-Reihenfolge, beide Pfeile und direkten Abschlussmarker.
+- Keine Datenbankschemamigration und keine Änderung an Trainingsengine, Health Auto Export, Nabu-Casa-Relay oder Security-Grenzen.
+- Statisch/isoliert und in Linux/Docker zu verifizieren; reale Home-Assistant-OS-/Ingress-Darstellung muss nach Installation lokal bestätigt werden.
+
 ## v0.2.14 – 2026-08-31
 
 - Wochenkarten zeigen für `completed`-Einheiten links einen grünen Haken; Status-Text und bestehende Karten-/Drag-Ausrichtung bleiben erhalten.

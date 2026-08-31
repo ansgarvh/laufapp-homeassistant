@@ -1,0 +1,44 @@
+/* Laufapp v0.2.15: deterministic week navigation and completed marker. */
+.week-toolbar.week-toolbar-days{
+  position:relative;
+  display:grid;
+  grid-template-columns:44px minmax(0,1fr) 44px;
+  align-items:center;
+  gap:10px;
+  margin:24px 0 4px;
+}
+.week-toolbar-days>.icon-btn{justify-self:start}
+.week-toolbar-days .week-title{min-width:0;text-align:center}
+.week-toolbar-days .week-next{
+  position:relative;
+  display:block;
+  justify-self:end;
+  width:44px;
+}
+.week-toolbar-days .week-next>.icon-btn{display:block;margin-left:auto}
+.week-toolbar-days .current-week{
+  position:absolute;
+  right:0;
+  bottom:calc(100% + 3px);
+  padding:0;
+  font-size:9px;
+  white-space:nowrap;
+}
+.week-workout::before{content:none!important;display:none!important}
+.week-status-mark,.week-status-spacer{
+  width:30px;
+  height:40px;
+  display:grid;
+  place-items:center;
+  justify-self:center;
+}
+.week-status-mark{
+  width:26px;
+  height:26px;
+  border-radius:50%;
+  background:var(--goodSoft);
+  color:var(--good);
+  font-size:16px;
+  line-height:1;
+  font-weight:900;
+}
