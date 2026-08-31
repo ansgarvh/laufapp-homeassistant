@@ -1,0 +1,36 @@
+name: Apply verified v0.2.18 patch
+
+on:
+  push:
+    branches:
+      - v0.2.18-multi-race
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - name: Reconstruct and verify patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .github/v0218-gz/00 .github/v0218-gz/01 .github/v0218-gz/02 .github/v0218-gz/03 | base64 -d | gzip -d > /tmp/v0218.patch
+          git apply --check /tmp/v0218.patch
+          git apply /tmp/v0218.patch
+      - name: Commit product changes and remove transfer files
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .github/v0218-patch .github/v0218-gz .github/workflows/apply-v0218.yml
+          git add -A
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'v0.2.18: multi-race planning and race entry UX'
+          git push origin HEAD:v0.2.18-multi-race
