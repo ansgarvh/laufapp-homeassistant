@@ -1,0 +1,33 @@
+name: Temporary v0.2.15 apply verified payload
+
+on:
+  push:
+    branches:
+      - v0.2.15-week-ui-fix
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.head_commit.message == 'chore: apply verified v0.2.15 payload'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: v0.2.15-week-ui-fix
+      - name: Apply verified payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .github/v0215-payload/part_* | base64 -d > /tmp/v0215_payload.tar.gz
+          echo 'd9b5200b79dd775f8b468549bcc74a2d4f2b8e968f24266c052d1a9b36406fa3  /tmp/v0215_payload.tar.gz' | sha256sum -c -
+          tar -xzf /tmp/v0215_payload.tar.gz
+          rm -rf .github/v0215-payload
+          git rm .github/workflows/tmp-v0215-apply.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "v0.2.15: fix week navigation and completed marker"
+          git push origin HEAD:v0.2.15-week-ui-fix
