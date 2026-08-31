@@ -1,6 +1,14 @@
-# Laufapp v0.2.14
+# Laufapp v0.2.15
 
 Private, mobile-first Lauf-PWA für Home Assistant OS. Laufapp verbindet eine lokale Trainings-/Prognoseengine mit Apple-Health-Daten, Health Auto Export und einem optionalen OpenAI-Coach. Die Anwendung ist für einen einzelnen privaten Nutzer ausgelegt.
+
+
+## Neu in v0.2.15 – Wochen-Navigation und Abschlussstatus korrigiert
+
+- **Pfeile am Wochenzeitraum:** Vorherige/nächste Woche stehen jetzt zusammen mit dem Datumsbereich direkt oberhalb der sieben Tagesfelder; „Aktuelle Woche“ bleibt verfügbar, verschiebt den rechten Pfeil aber nicht mehr aus dieser Zeile.
+- **Absolviert-Haken zuverlässig:** Der grüne Haken wird direkt aus dem vom Backend gelieferten Workout-Status `completed` gerendert. Die fehleranfällige nachträgliche Erkennung über sichtbaren Text und `MutationObserver` ist aus dem aktiven Frontend entfernt.
+- **Status-Roundtrip getestet:** `completed`/`skipped` werden über die bestehende API persistent gespeichert und von `/api/week` nach dem Neuladen wieder ausgegeben.
+- Keine Datenbankschemamigration, keine Änderung an Trainingsengine, Health Auto Export, Nabu-Casa-Relay oder den Security-Grenzen.
 
 ## Neu in v0.2.14 – Wochenübersicht klarer
 
@@ -81,7 +89,7 @@ Ausführliche Details und verbleibende Risiken stehen in `SECURITY.md` und `NABU
 
 ## Persistenz
 
-Benutzerdaten liegen im persistenten Home-Assistant-`/data`-Bereich. v0.2.14 benötigt **keine Datenbankschemamigration**.
+Benutzerdaten liegen im persistenten Home-Assistant-`/data`-Bereich. v0.2.15 benötigt **keine Datenbankschemamigration**.
 
 ## OpenAI
 
@@ -89,7 +97,7 @@ Der OpenAI-API-Key bleibt serverseitig in der Home-Assistant-App-Konfiguration u
 
 ## Release-Prüfungen
 
-Vor Merge laufen Python-Compilecheck einschließlich Custom Integration, JavaScript-Syntaxchecks, vollständige Pytest-Regression über den v0.2.14-Entry-Point, realitätsnahe HAE-v2-Regressionstests, >262144-Zeichen-Relaytest, Rate-/Slow-Body-Webhooktests, 16-Wochen-Marathonsimulation, neun randomisierte Läuferprofile, `pip check`, `pip-audit`, Git-History-Secret-Scan, Bandit-Gate, Docker-Build, direkter HAE-E2E, interner Relay-E2E, externe Ingress-Spoofing-Negativtests und positive Home-Assistant-Ingress-Netzsimulation.
+Vor Merge laufen Python-Compilecheck einschließlich Custom Integration, JavaScript-Syntaxchecks, vollständige Pytest-Regression über den v0.2.15-Entry-Point, realitätsnahe HAE-v2-Regressionstests, >262144-Zeichen-Relaytest, Rate-/Slow-Body-Webhooktests, 16-Wochen-Marathonsimulation, neun randomisierte Läuferprofile, `pip check`, `pip-audit`, Git-History-Secret-Scan, Bandit-Gate, Docker-Build, direkter HAE-E2E, interner Relay-E2E, externe Ingress-Spoofing-Negativtests und positive Home-Assistant-Ingress-Netzsimulation.
 
 Statisch/isoliert und in Linux/Docker getestet. Die echte Home-Assistant-OS-/Custom-Integration-/Nabu-Casa-Remote-UI-/Health-Auto-Export-iPhone-Integration muss nach Installation auf dem Zielsystem lokal verifiziert werden.
 
@@ -101,7 +109,7 @@ export LAUFAPP_DATA_DIR=/tmp/laufapp-data
 export LAUFAPP_TRANSFER_DIR=/tmp/laufapp-transfer
 export LAUFAPP_TRUSTED_INGRESS_ONLY=0
 export LAUFAPP_HEALTH_AUTO_EXPORT_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
-uvicorn main_v0214:app --host 127.0.0.1 --port 8099 --no-proxy-headers
+uvicorn main_v0215:app --host 127.0.0.1 --port 8099 --no-proxy-headers
 ```
 
-Weitere Details: `SECURITY.md`, `NABU_CASA_HEALTH_SYNC.md`, `RELEASE_NOTES_v0.2.14.md`, `TRAINING_ENGINE.md`, `MIGRATIONS.md`.
+Weitere Details: `SECURITY.md`, `NABU_CASA_HEALTH_SYNC.md`, `RELEASE_NOTES_v0.2.15.md`, `TRAINING_ENGINE.md`, `MIGRATIONS.md`.
