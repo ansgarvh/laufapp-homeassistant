@@ -1,0 +1,153 @@
+name: Apply v0.2.16 activity linking
+on:
+  push:
+    branches: [v0.2.16-activity-linking]
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: v0.2.16-activity-linking
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+      - name: Apply focused patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('laufapp/app/training.py');s=p.read_text()
+          old="""def auto_match_run(c,run_id):
+              r=c.execute(\"SELECT * FROM runs WHERE id=?\",(run_id,)).fetchone();day=parse_dt(r['started_at']).date().isoformat() if r else '' ;w=c.execute(\"SELECT * FROM workouts WHERE scheduled_date=? AND status='planned' ORDER BY ABS(distance_km-?) LIMIT 1\",(day,float(r['distance_km']) if r else 0)).fetchone()
+              if not w:return None
+              c.execute(\"UPDATE workouts SET status='completed',linked_run_id=? WHERE id=?\",(run_id,w['id']));return int(w['id'])
+          """
+          new="""AUTO_MATCH_MIN_DISTANCE_RATIO = 0.90
+
+          def auto_match_run(c,run_id):
+              r=c.execute(\"SELECT * FROM runs WHERE id=?\",(run_id,)).fetchone()
+              if not r:return None
+              already=c.execute(\"SELECT id FROM workouts WHERE linked_run_id=? ORDER BY id LIMIT 1\",(run_id,)).fetchone()
+              if already:return int(already['id'])
+              day=parse_dt(r['started_at']).date().isoformat();run_km=float(r['distance_km'] or 0)
+              w=c.execute(\"SELECT * FROM workouts WHERE scheduled_date=? AND status='planned' AND linked_run_id IS NULL AND distance_km>0 AND ?>=distance_km*? ORDER BY ABS(distance_km-?),id LIMIT 1\",(day,run_km,AUTO_MATCH_MIN_DISTANCE_RATIO,run_km)).fetchone()
+              if not w:return None
+              c.execute(\"UPDATE workouts SET status='completed',linked_run_id=? WHERE id=?\",(run_id,w['id']));return int(w['id'])
+
+          def run_link_info(c,run_id):
+              r=c.execute(\"SELECT * FROM runs WHERE id=?\",(run_id,)).fetchone()
+              if not r:raise KeyError('Lauf nicht gefunden')
+              linked=c.execute(\"SELECT * FROM workouts WHERE linked_run_id=? ORDER BY id LIMIT 1\",(run_id,)).fetchone()
+              day=parse_dt(r['started_at']).date().isoformat()
+              candidates=[] if linked else c.execute(\"SELECT * FROM workouts WHERE scheduled_date=? AND linked_run_id IS NULL ORDER BY ABS(distance_km-?),id\",(day,float(r['distance_km'] or 0))).fetchall()
+              return {'run':dict(r),'linked_workout':_wdict(linked) if linked else None,'candidates':[_wdict(x) for x in candidates]}
+
+          def link_run_to_workout(c,run_id,wid):
+              r=c.execute(\"SELECT * FROM runs WHERE id=?\",(run_id,)).fetchone();w=c.execute(\"SELECT * FROM workouts WHERE id=?\",(wid,)).fetchone()
+              if not r:raise KeyError('Lauf nicht gefunden')
+              if not w:raise KeyError('Training nicht gefunden')
+              existing=c.execute(\"SELECT id FROM workouts WHERE linked_run_id=? AND id!=? LIMIT 1\",(run_id,wid)).fetchone()
+              if existing:raise ValueError('Dieser Lauf ist bereits mit einer anderen Aktivität verknüpft.')
+              if w['linked_run_id'] is not None and int(w['linked_run_id'])!=int(run_id):raise ValueError('Diese Aktivität ist bereits mit einem anderen Lauf verknüpft.')
+              day=parse_dt(r['started_at']).date().isoformat()
+              if w['scheduled_date']!=day:raise ValueError('Manuell können nur Lauf und Planaktivität desselben Tages verknüpft werden.')
+              c.execute(\"UPDATE workouts SET status='completed',linked_run_id=?,manual_override=1,modified_by='user' WHERE id=?\",(run_id,wid))
+              return _wdict(c.execute(\"SELECT * FROM workouts WHERE id=?\",(wid,)).fetchone())
+          """
+          assert old in s
+          p.write_text(s.replace(old,new))
+
+          Path('laufapp/app/main_v0216.py').write_text('''\"\"\"Laufapp v0.2.16 activity-linking release.
+
+          Adds asymmetric distance-aware automatic workout matching and explicit manual
+          run-to-plan linking while preserving the v0.2.15 UI/security/HAE stack.
+          \"\"\"
+          from __future__ import annotations
+
+          from fastapi import HTTPException
+          import main_v0215 as previous
+          from db import db_conn
+          import training as activity_matching
+
+          APP_VERSION = \"0.2.16\"
+          _module = previous
+          for _ in range(22):
+              if _module is None: break
+              if hasattr(_module, \"APP_VERSION\"): _module.APP_VERSION = APP_VERSION
+              _module = getattr(_module, \"previous\", None)
+          core = previous.core
+          core.db_module.APP_VERSION = APP_VERSION
+          core.legacy.APP_VERSION = APP_VERSION
+          core.legacy.app.version = APP_VERSION
+          core.training.VERSION = APP_VERSION
+          process_health_auto_export_request = previous.process_health_auto_export_request
+          app = previous.app
+
+          @app.get('/api/runs/{rid}/link-candidates')
+          def api_run_link_candidates(rid:int):
+              with db_conn() as c:
+                  try:return activity_matching.run_link_info(c,rid)
+                  except KeyError as e:raise HTTPException(404,str(e)) from e
+
+          @app.post('/api/runs/{rid}/link-workout/{wid}')
+          def api_run_link_workout(rid:int,wid:int):
+              with db_conn() as c:
+                  try:return {'ok':True,'workout':activity_matching.link_run_to_workout(c,rid,wid)}
+                  except KeyError as e:raise HTTPException(404,str(e)) from e
+                  except ValueError as e:raise HTTPException(409,str(e)) from e
+          ''')
+
+          p=Path('laufapp/app/static/app.js');s=p.read_text();a=s.index('  async function openRunEditModal(id){');b=s.index('  function openShoeModal()',a)
+          new_js='''  async function openRunEditModal(id){
+              const run=(state.runs||[]).find(x=>x.id===id);if(!run)return;const [shoes,linkInfo]=await Promise.all([api('api/shoes'),api(`api/runs/${id}/link-candidates`)]);const linked=linkInfo.linked_workout;
+              const linkBlock=linked?`<div class=\"quality-ok\"><b>✓</b><span>Verknüpft mit <strong>${esc(linked.title)}</strong> · ${fmt1(linked.distance_km)} km</span></div>`:`<button class=\"button\" id=\"link-activity\" type=\"button\">Aktivität verknüpfen</button>`;
+              modal('Lauf ergänzen',`<div class=\"card soft\" style=\"margin-bottom:12px\"><strong>${fmt1(run.distance_km)} km · ${secondsText(run.duration_s)}</strong><div class=\"small muted\" style=\"margin-top:4px\">${niceDate(String(run.started_at).slice(0,10))} · ${pace(run.duration_s,run.distance_km)}</div></div><form class=\"form-grid\" id=\"run-edit-form\"><div class=\"grid2\"><label class=\"field\"><span>RPE 1–10</span><select class=\"select\" name=\"rpe\"><option value=\"\">–</option>${Array.from({length:10},(_,i)=>`<option value=\"${i+1}\" ${Number(run.rpe)===i+1?'selected':''}>${i+1}</option>`).join('')}</select></label><label class=\"field\"><span>Schuh</span><select class=\"select\" name=\"shoe\"><option value=\"\">–</option>${shoes.filter(x=>!x.archived).map(sh=>`<option value=\"${sh.id}\" ${Number(run.shoe_id)===sh.id?'selected':''}>${esc([sh.brand,sh.model,sh.nickname].filter(Boolean).join(' · '))} · ${fmt1(sh.total_km)} km</option>`).join('')}</select></label></div><label class=\"field\"><span>Notiz</span><textarea class=\"textarea\" name=\"notes\">${esc(run.notes||'')}</textarea></label><button class=\"button primary\" type=\"submit\">Speichern</button>${linkBlock}</form>`,m=>{m.querySelector('form').addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget;try{await api(`api/runs/${id}`,{method:'PATCH',body:{rpe:num(f.rpe.value),shoe_id:num(f.shoe.value),notes:f.notes.value}});closeModal();toast('Lauf ergänzt.');renderProgress()}catch(err){toast(err.message,true)}});m.querySelector('#link-activity')?.addEventListener('click',()=>openRunLinkModal(run,linkInfo.candidates||[]))})
+            }
+            function openRunLinkModal(run,candidates){
+              const body=candidates.length?`<p class=\"form-note\">Die automatische Zuordnung erfolgt nur bei mindestens 90 % der geplanten Distanz. Manuell kannst du eine Aktivität desselben Tages trotzdem verknüpfen.</p><div class=\"card flat\">${candidates.map(w=>{const pct=Number(w.distance_km)>0?Number(run.distance_km)/Number(w.distance_km)*100:0;return `<button type=\"button\" class=\"list-row\" data-link-workout=\"${w.id}\"><div class=\"list-copy\"><strong>${esc(w.title)}</strong><span>${fmt1(w.distance_km)} km geplant · ${fmt1(run.distance_km)} km gelaufen</span></div><div class=\"list-value\"><strong>${fmt0(pct)}%</strong><span>${esc(w.status)}</span></div></button>`}).join('')}</div>`:`<div class=\"card empty\"><h3>Keine Aktivität gefunden</h3><p>Für denselben Tag gibt es keine unverknüpfte Planaktivität.</p></div>`;
+              modal('Aktivität verknüpfen',body,m=>m.querySelectorAll('[data-link-workout]').forEach(b=>b.addEventListener('click',async()=>{try{await api(`api/runs/${run.id}/link-workout/${b.dataset.linkWorkout}`,{method:'POST'});closeModal();toast('Lauf und Planaktivität verknüpft.');renderProgress()}catch(err){toast(err.message,true)}})))
+            }
+
+          '''
+          p.write_text(s[:a]+new_js+s[b:])
+
+          repls={
+          'laufapp/config.yaml':[('version: \"0.2.15\"','version: \"0.2.16\"')],
+          'laufapp/Dockerfile':[('ARG BUILD_VERSION=0.2.15','ARG BUILD_VERSION=0.2.16')],
+          'laufapp/run.sh':[('main_v0215:app','main_v0216:app'),('version=0.2.15','version=0.2.16')],
+          'laufapp/app/health_auto_export_gateway.py':[('from main_v0215 import APP_VERSION','from main_v0216 import APP_VERSION')],
+          'custom_components/laufapp_hae_relay/manifest.json':[('\"version\": \"0.2.15\"','\"version\": \"0.2.16\"')],
+          'laufapp/app/static/index.html':[('app.js?v=0.2.15','app.js?v=0.2.16')],
+          'laufapp/app/static/sw.js':[(\"const CACHE='laufapp-v0.2.15'\",\"const CACHE='laufapp-v0.2.16'\"),('app.js?v=0.2.15','app.js?v=0.2.16')],
+          }
+          for fn,rs in repls.items():
+              p=Path(fn);s=p.read_text()
+              for x,y in rs:
+                  assert x in s,(fn,x);s=s.replace(x,y)
+              p.write_text(s)
+
+          p=Path('tests/conftest.py');s=p.read_text().replace('import main_v0215','import main_v0216').replace('TestClient(main_v0215.app)','TestClient(main_v0216.app)');p.write_text(s)
+          p=Path('tests/test_release_static.py');s=p.read_text()
+          s=s.replace("cfg['version']=='0.2.15","cfg['version']=='0.2.16").replace("APP_VERSION = \"0.2.15\"' in (ROOT/'laufapp/app/main_v0215.py'","APP_VERSION = \"0.2.16\"' in (ROOT/'laufapp/app/main_v0216.py'").replace('ARG BUILD_VERSION=0.2.15','ARG BUILD_VERSION=0.2.16').replace('main_v0215:app','main_v0216:app').replace('# Laufapp v0.2.15','# Laufapp v0.2.16').replace('## v0.2.15 – 2026-08-31','## v0.2.16 – 2026-08-31').replace('RELEASE_NOTES_v0.2.15.md','RELEASE_NOTES_v0.2.16.md').replace('Laufapp v0.2.15','Laufapp v0.2.16').replace("const CACHE='laufapp-v0.2.15'","const CACHE='laufapp-v0.2.16'").replace('app.js?v=0.2.15','app.js?v=0.2.16').replace('from main_v0215 import APP_VERSION','from main_v0216 import APP_VERSION').replace("manifest['version']=='0.2.15'","manifest['version']=='0.2.16'")
+          p.write_text(s)
+
+          p=Path('README.md');s=p.read_text();s=s.replace('# Laufapp v0.2.15','# Laufapp v0.2.16',1);pos=s.find('\n## ',2);s=s[:pos]+'''\n## Neu in v0.2.16 – robuste Aktivitätszuordnung\n\n- Automatische Zuordnung nur, wenn die gelaufene Distanz mindestens 90 % der geplanten Distanz erreicht.\n- Übererfüllung bleibt erlaubt: z. B. 20 km tatsächlich bei 15 km geplant wird automatisch verknüpft.\n- Kürzere Läufe unter 90 % bleiben unverknüpft und können im Lauf-Menü explizit über **„Aktivität verknüpfen“** einer Planaktivität desselben Tages zugeordnet werden.\n- Keine Datenbankschemamigration.\n\n'''+s[pos:];s=s.replace('v0.2.15 benötigt **keine Datenbankschemamigration**','v0.2.16 benötigt **keine Datenbankschemamigration**').replace('RELEASE_NOTES_v0.2.15.md','RELEASE_NOTES_v0.2.16.md');p.write_text(s)
+          p=Path('CHANGELOG.md');s=p.read_text();idx=s.find('## v0.2.15');s=s[:idx]+'''## v0.2.16 – 2026-08-31\n\n- Auto-Matching nutzt eine asymmetrische Distanzregel: mindestens 90 % des Planwerts erforderlich; Überschreitungen sind unbegrenzt zulässig.\n- Bereits verknüpfte Läufe werden idempotent nicht erneut einer zweiten Einheit zugewiesen.\n- Lauf-Menü um **„Aktivität verknüpfen“** erweitert; manuelle Verknüpfung ist für unverknüpfte Planaktivitäten desselben Tages möglich und setzt die Aktivität auf `completed`.\n- Neue Regressionstests für 89,9 %, exakt 90 %, deutliche Übererfüllung, manuelles Verknüpfen und Einmal-Verknüpfung.\n- Keine Datenbankschemamigration.\n\n'''+s[idx:];p.write_text(s)
+          Path('RELEASE_NOTES_v0.2.16.md').write_text('''# Laufapp v0.2.16\n\n## Aktivitätszuordnung\n\nAutomatisches Matching erfolgt nur, wenn ein realer Lauf am selben Tag mindestens 90 % der geplanten Distanz erreicht. Eine längere reale Distanz ist zulässig und gilt als Übererfüllung. Unterhalb der 90-%-Grenze bleibt die Planaktivität offen.\n\nIm Menü eines unverknüpften Laufs steht nun **„Aktivität verknüpfen“** zur Verfügung. Dort kann eine unverknüpfte Planaktivität desselben Tages bewusst manuell gewählt werden; die Distanzgrenze gilt für diese explizite Nutzerentscheidung nicht.\n\nEin realer Lauf kann nicht gleichzeitig mit mehreren Planaktivitäten verknüpft werden.\n\nKeine Datenbankschemamigration.\n''')
+          Path('tests/test_v0216_activity_linking.py').write_text('''def _add_run(c, workout, ratio):\n    return c.post('/api/runs',json={'started_at':workout['scheduled_date']+'T08:00:00+02:00','distance_km':float(workout['distance_km'])*ratio,'duration_s':3600,'notes':'','source':'manual'})\n\ndef test_auto_match_rejects_more_than_ten_percent_short(setup_client):\n    c=setup_client;w=c.get('/api/week').json()['workouts'][0];r=_add_run(c,w,0.899);assert r.status_code==200 and r.json()['matched_workout_id'] is None;ww=next(x for x in c.get('/api/week').json()['workouts'] if x['id']==w['id']);assert ww['status']=='planned' and ww['linked_run_id'] is None\n\ndef test_auto_match_accepts_exactly_ninety_percent(setup_client):\n    c=setup_client;w=c.get('/api/week').json()['workouts'][0];r=_add_run(c,w,0.90);assert r.status_code==200 and r.json()['matched_workout_id']==w['id']\n\ndef test_auto_match_accepts_overfulfilment(setup_client):\n    c=setup_client;w=c.get('/api/week').json()['workouts'][0];r=_add_run(c,w,1.40);assert r.status_code==200 and r.json()['matched_workout_id']==w['id']\n\ndef test_short_run_can_be_manually_linked_same_day(setup_client):\n    c=setup_client;w=c.get('/api/week').json()['workouts'][0];r=_add_run(c,w,0.60);rid=r.json()['id'];info=c.get(f'/api/runs/{rid}/link-candidates');assert info.status_code==200 and any(x['id']==w['id'] for x in info.json()['candidates']);linked=c.post(f'/api/runs/{rid}/link-workout/{w[\"id\"]}');assert linked.status_code==200 and linked.json()['workout']['status']=='completed';info2=c.get(f'/api/runs/{rid}/link-candidates').json();assert info2['linked_workout']['id']==w['id'] and info2['candidates']==[]\n\ndef test_manual_link_rejects_different_day(setup_client):\n    c=setup_client;workouts=c.get('/api/week').json()['workouts'];w1,w2=workouts[0],workouts[1];r=_add_run(c,w1,0.50);rid=r.json()['id'];out=c.post(f'/api/runs/{rid}/link-workout/{w2[\"id\"]}');assert out.status_code==409\n\ndef test_ui_exposes_manual_link_action():\n    from pathlib import Path\n    js=(Path(__file__).resolve().parents[1]/'laufapp/app/static/app.js').read_text();assert 'Aktivität verknüpfen' in js;assert 'api/runs/${id}/link-candidates' in js;assert 'api/runs/${run.id}/link-workout/${b.dataset.linkWorkout}' in js;assert 'mindestens 90 %' in js\n''')
+          PY
+          rm .github/workflows/apply-v0216.yml
+          python -m compileall -q laufapp/app custom_components/laufapp_hae_relay
+          node --check laufapp/app/static/app.js
+          pip install -q -r laufapp/requirements.txt pytest httpx pyyaml
+          pytest -q tests/test_v0216_activity_linking.py tests/test_release_static.py
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'v0.2.16: distance-aware activity linking'
+          git push origin HEAD:v0.2.16-activity-linking
