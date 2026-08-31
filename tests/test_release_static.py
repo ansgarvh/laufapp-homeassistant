@@ -4,22 +4,22 @@ ROOT=Path(__file__).resolve().parents[1]
 
 def test_versions_and_assets():
     cfg=yaml.safe_load((ROOT/'laufapp/config.yaml').read_text())
-    assert cfg['version']=='0.2.13'
-    assert 'APP_VERSION = "0.2.13"' in (ROOT/'laufapp/app/main_v0213.py').read_text()
-    assert 'ARG BUILD_VERSION=0.2.13' in (ROOT/'laufapp/Dockerfile').read_text()
-    assert 'main_v0213:app' in (ROOT/'laufapp/run.sh').read_text()
-    assert '# Laufapp v0.2.13' in (ROOT/'README.md').read_text()
-    assert '## v0.2.13 – 2026-08-30' in (ROOT/'CHANGELOG.md').read_text()
-    assert (ROOT/'RELEASE_NOTES_v0.2.13.md').exists()
-    assert 'Laufapp v0.2.13' in (ROOT/'RELEASE_NOTES_v0.2.13.md').read_text()
+    assert cfg['version']=='0.2.14'
+    assert 'APP_VERSION = "0.2.14"' in (ROOT/'laufapp/app/main_v0214.py').read_text()
+    assert 'ARG BUILD_VERSION=0.2.14' in (ROOT/'laufapp/Dockerfile').read_text()
+    assert 'main_v0214:app' in (ROOT/'laufapp/run.sh').read_text()
+    assert '# Laufapp v0.2.14' in (ROOT/'README.md').read_text()
+    assert '## v0.2.14 – 2026-08-31' in (ROOT/'CHANGELOG.md').read_text()
+    assert (ROOT/'RELEASE_NOTES_v0.2.14.md').exists()
+    assert 'Laufapp v0.2.14' in (ROOT/'RELEASE_NOTES_v0.2.14.md').read_text()
     static=ROOT/'laufapp/app/static'
-    for name in ['index.html','styles.css','bugfix.css','app.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','assets/bugfix.css','assets/v020.js','assets/v020.css','assets/v020_science.js','assets/v020_science.css','assets/v023_aggressiveness.js','assets/v025.js','assets/v025.css','assets/v0213.js','assets/v0213.css']:assert (static/name).exists()
+    for name in ['index.html','styles.css','bugfix.css','app.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','assets/bugfix.css','assets/v020.js','assets/v020.css','assets/v020_science.js','assets/v020_science.css','assets/v023_aggressiveness.js','assets/v025.js','assets/v025.css','assets/v0213.js','assets/v0213.css','assets/v0214.js','assets/v0214.css']:assert (static/name).exists()
     m=json.loads((static/'manifest.webmanifest').read_text());assert m['display']=='standalone'
     sw=(static/'sw.js').read_text()
-    assert "const CACHE='laufapp-v0.2.13'" in sw
-    assert 'assets/v0213.js?v=0.2.13' in sw and 'assets/v0213.css?v=0.2.13' in sw
+    assert "const CACHE='laufapp-v0.2.14'" in sw
+    assert 'assets/v0213.js?v=0.2.13' in sw and 'assets/v0213.css?v=0.2.13' in sw and 'assets/v0214.css?v=0.2.14' in sw and 'assets/v0214.js?v=0.2.14' in sw
     index=(static/'index.html').read_text()
-    for asset in ['app.js?v=0.2.5','assets/bugfix.css?v=0.2.5','assets/v020.js?v=0.2.5','assets/v020_science.js?v=0.2.5','assets/v023_aggressiveness.js?v=0.2.5','assets/v025.js?v=0.2.5','assets/v025.css?v=0.2.5','assets/v0213.js?v=0.2.13','assets/v0213.css?v=0.2.13']:
+    for asset in ['app.js?v=0.2.5','assets/bugfix.css?v=0.2.5','assets/v020.js?v=0.2.5','assets/v020_science.js?v=0.2.5','assets/v023_aggressiveness.js?v=0.2.5','assets/v025.js?v=0.2.5','assets/v025.css?v=0.2.5','assets/v0213.js?v=0.2.13','assets/v0213.css?v=0.2.13','assets/v0214.js?v=0.2.14','assets/v0214.css?v=0.2.14']:
         assert asset in index
     races=(static/'assets/v020.js').read_text()
     science=(static/'assets/v020_science.js').read_text()
@@ -40,6 +40,7 @@ def test_versions_and_assets():
     subprocess.run(['node','--check',str(static/'assets/v023_aggressiveness.js')],check=True)
     subprocess.run(['node','--check',str(static/'assets/v025.js')],check=True)
     subprocess.run(['node','--check',str(static/'assets/v0213.js')],check=True)
+    subprocess.run(['node','--check',str(static/'assets/v0214.js')],check=True)
 
 def test_ha_app_config_and_health_auto_export_gateway():
     cfg=yaml.safe_load((ROOT/'laufapp/config.yaml').read_text())
@@ -60,7 +61,7 @@ def test_ha_app_config_and_health_auto_export_gateway():
     gateway=(ROOT/'laufapp/app/health_auto_export_gateway.py').read_text()
     assert '@app.post("/health-auto-export")' in gateway
     assert '@app.post("/home-assistant-relay")' in gateway
-    assert 'from main_v0213 import APP_VERSION' in gateway
+    assert 'from main_v0214 import APP_VERSION' in gateway
     assert 'LAUFAPP_HAE_RELAY_OK transport=nabu_casa' in gateway
     assert 'openapi_url=None' in gateway and 'Cache-Control' in gateway
     hae=(ROOT/'laufapp/app/health_auto_export_v027.py').read_text()
@@ -91,7 +92,7 @@ def test_ha_app_config_and_health_auto_export_gateway():
     assert '.diagnostics.jsonl' in imports
     assert 'traceback.format_exc()' in imports
     assert 'resumed_after_restart' in imports
-    assert (ROOT/'laufapp/app/main_v0213.py').exists()
+    assert (ROOT/'laufapp/app/main_v0214.py').exists()
     assert not (ROOT/'laufapp/app/main_v030.py').exists()
     assert not (ROOT/'laufapp/app/ios_healthkit_sync.py').exists()
 
@@ -101,7 +102,7 @@ def test_direct_home_assistant_webhook_relay_is_pinned_and_bounded():
     assert (component/'__init__.py').exists() and (component/'manifest.json').exists()
     manifest=json.loads((component/'manifest.json').read_text())
     assert manifest['domain']=='laufapp_hae_relay'
-    assert manifest['version']=='0.2.13'
+    assert manifest['version']=='0.2.14'
     assert manifest['requirements']==[]
     assert 'webhook' in manifest['dependencies']
     source=(component/'__init__.py').read_text()

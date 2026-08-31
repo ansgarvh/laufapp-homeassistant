@@ -1,5 +1,14 @@
 # Laufapp Changelog
 
+## v0.2.14 – 2026-08-31
+
+- Wochenkarten zeigen für `completed`-Einheiten links einen grünen Haken; Status-Text und bestehende Karten-/Drag-Ausrichtung bleiben erhalten.
+- Wochen-Datumsbereich aus der oberen Navigationsleiste direkt über die sieben Tagesfelder verschoben; Wochenwechsel, Swipe und „Aktuelle Woche“ bleiben unverändert.
+- App-/Docker-/Gateway-/PWA-Version auf 0.2.14 synchronisiert; Service-Worker-Cache aktualisiert und additive v0.2.14-UI-Schicht eingebunden; die bestehende `app.js` bleibt unverändert.
+- Keine Datenbankschemamigration, keine Änderung der Trainingsengine, Health-Auto-Export-Logik oder Security-Grenzen.
+- Neue UI-Regressionstests prüfen Status-Hook, grünen Haken und Position des Wochenzeitraums.
+- Statisch/isoliert und in Linux/Docker zu verifizieren; reale Home-Assistant-OS-/Ingress-Darstellung muss nach Installation lokal bestätigt werden.
+
 ## v0.2.13 – 2026-08-30
 
 - Umfassende Security-/Bereinigungsrunde nach dem real bestätigten v0.2.12-HAE-Fix: keine Datenbankschemamigration und keine Änderung an Trainingsplanlogik oder bestehenden Nutzerdaten.

@@ -1,0 +1,19 @@
+/* Laufapp v0.2.14: completed marker and week-date placement */
+.week-toolbar{margin-bottom:12px}
+.week-title-days{margin:14px 0 4px;text-align:center}
+.week-title-days strong{font-size:14px}
+.week-title-days span{font-size:10px;color:var(--muted)}
+.week-workout.status-completed:not(:has(.drag-handle))::before{
+  content:"✓";
+  width:26px;
+  height:26px;
+  display:grid;
+  place-items:center;
+  justify-self:center;
+  border-radius:50%;
+  background:var(--goodSoft);
+  color:var(--good);
+  font-size:15px;
+  line-height:1;
+  font-weight:900;
+}
