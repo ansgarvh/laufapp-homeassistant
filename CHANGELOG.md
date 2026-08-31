@@ -1,5 +1,13 @@
 # Laufapp Changelog
 
+## v0.2.16 – 2026-08-31
+
+- Auto-Matching nutzt eine asymmetrische Distanzregel: mindestens 90 % des Planwerts erforderlich; Überschreitungen sind unbegrenzt zulässig.
+- Bereits verknüpfte Läufe werden idempotent nicht erneut einer zweiten Einheit zugewiesen.
+- Lauf-Menü um **„Aktivität verknüpfen“** erweitert; manuelle Verknüpfung ist für unverknüpfte Planaktivitäten desselben Tages möglich und setzt die Aktivität auf `completed`.
+- Neue Regressionstests für 89,9 %, exakt 90 %, deutliche Übererfüllung, manuelles Verknüpfen und Einmal-Verknüpfung.
+- Keine Datenbankschemamigration.
+
 ## v0.2.15 – 2026-08-31
 
 - Wochen-Navigation vollständig an den Datumsbereich verschoben: linker/rechter Pfeil und Wochenzeitraum stehen nun gemeinsam direkt oberhalb der sieben Tagesfelder.

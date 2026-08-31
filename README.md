@@ -1,6 +1,14 @@
-# Laufapp v0.2.15
+# Laufapp v0.2.16
 
 Private, mobile-first Lauf-PWA für Home Assistant OS. Laufapp verbindet eine lokale Trainings-/Prognoseengine mit Apple-Health-Daten, Health Auto Export und einem optionalen OpenAI-Coach. Die Anwendung ist für einen einzelnen privaten Nutzer ausgelegt.
+
+
+## Neu in v0.2.16 – robuste Aktivitätszuordnung
+
+- Automatische Zuordnung nur, wenn die gelaufene Distanz mindestens 90 % der geplanten Distanz erreicht.
+- Übererfüllung bleibt erlaubt: z. B. 20 km tatsächlich bei 15 km geplant wird automatisch verknüpft.
+- Kürzere Läufe unter 90 % bleiben unverknüpft und können im Lauf-Menü explizit über **„Aktivität verknüpfen“** einer Planaktivität desselben Tages zugeordnet werden.
+- Keine Datenbankschemamigration.
 
 
 ## Neu in v0.2.15 – Wochen-Navigation und Abschlussstatus korrigiert
@@ -89,7 +97,7 @@ Ausführliche Details und verbleibende Risiken stehen in `SECURITY.md` und `NABU
 
 ## Persistenz
 
-Benutzerdaten liegen im persistenten Home-Assistant-`/data`-Bereich. v0.2.15 benötigt **keine Datenbankschemamigration**.
+Benutzerdaten liegen im persistenten Home-Assistant-`/data`-Bereich. v0.2.16 benötigt **keine Datenbankschemamigration**.
 
 ## OpenAI
 
@@ -112,4 +120,4 @@ export LAUFAPP_HEALTH_AUTO_EXPORT_TOKEN="$(python -c 'import secrets; print(secr
 uvicorn main_v0215:app --host 127.0.0.1 --port 8099 --no-proxy-headers
 ```
 
-Weitere Details: `SECURITY.md`, `NABU_CASA_HEALTH_SYNC.md`, `RELEASE_NOTES_v0.2.15.md`, `TRAINING_ENGINE.md`, `MIGRATIONS.md`.
+Weitere Details: `SECURITY.md`, `NABU_CASA_HEALTH_SYNC.md`, `RELEASE_NOTES_v0.2.16.md`, `TRAINING_ENGINE.md`, `MIGRATIONS.md`.
