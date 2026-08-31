@@ -1,0 +1,49 @@
+name: Temporary v0.2.14 changelog updater
+
+on:
+  push:
+    branches:
+      - v0.2.14-week-ui
+
+permissions:
+  contents: write
+
+jobs:
+  update-changelog:
+    if: github.event.head_commit.message == 'chore: prepare v0.2.14 changelog update'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: v0.2.14-week-ui
+      - name: Prepend v0.2.14 changelog and remove temporary workflow
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('CHANGELOG.md')
+          text = path.read_text(encoding='utf-8')
+          section = '''## v0.2.14 – 2026-08-31
+
+          - Wochenkarten zeigen für `completed`-Einheiten links einen grünen Haken; Status-Text und bestehende Karten-/Drag-Ausrichtung bleiben erhalten.
+          - Wochen-Datumsbereich aus der oberen Navigationsleiste direkt über die sieben Tagesfelder verschoben; Wochenwechsel, Swipe und „Aktuelle Woche“ bleiben unverändert.
+          - App-/Docker-/Gateway-/PWA-Version auf 0.2.14 synchronisiert; Service-Worker-Cache aktualisiert und die additive v0.2.14-UI-Schicht eingebunden; die bestehende `app.js` bleibt unverändert.
+          - Keine Datenbankschemamigration, keine Änderung der Trainingsengine, Health-Auto-Export-Logik oder Security-Grenzen.
+          - Neue UI-Regressionstests prüfen Status-Hook, grünen Haken und Position des Wochenzeitraums.
+          - Statisch/isoliert und in Linux/Docker zu verifizieren; reale Home-Assistant-OS-/Ingress-Darstellung muss nach Installation lokal bestätigt werden.
+
+          '''
+          marker = '# Laufapp Changelog\n\n'
+          if '## v0.2.14 – 2026-08-31' not in text:
+              if not text.startswith(marker):
+                  raise SystemExit('Unexpected changelog header')
+              path.write_text(marker + section + text[len(marker):], encoding='utf-8')
+          PY
+          git rm .github/workflows/tmp-v0214-changelog.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          git commit -m "docs: add v0.2.14 changelog"
+          git push origin HEAD:v0.2.14-week-ui
