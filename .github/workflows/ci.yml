@@ -118,7 +118,8 @@ jobs:
             -v /tmp/hae-relay.json:/tmp/hae-relay.json:ro \
             --entrypoint python laufapp-ci:${{ github.sha }} -c \
             "import json,os,urllib.request; data=open('/tmp/hae-relay.json','rb').read(); url='http://laufapp-smoke:8100/home-assistant-relay'; headers={'Content-Type':'application/json','X-Laufapp-Token':os.environ['TOKEN']}; first=json.loads(urllib.request.urlopen(urllib.request.Request(url,data=data,headers=headers,method='POST'),timeout=5).read()); second=json.loads(urllib.request.urlopen(urllib.request.Request(url,data=data,headers=headers,method='POST'),timeout=5).read()); assert first['ok'] and first['runs_added']==1 and first['samples_added']==2 and first['gps_points_added']==1, first; assert second['ok'] and second['runs_existing']==1 and second['samples_added']==0 and second['gps_points_added']==0, second; assert 'predictions' not in first and 'version' not in first"
-          docker logs laufapp-smoke 2>&1 | grep -q 'LAUFAPP_HAE_RELAY_OK transport=nabu_casa'
+          docker logs laufapp-smoke > /tmp/laufapp-smoke.log 2>&1
+          grep -q 'LAUFAPP_HAE_RELAY_OK transport=nabu_casa' /tmp/laufapp-smoke.log
 
           docker rm -f laufapp-smoke >/dev/null
           docker network rm ha-relay-test >/dev/null
