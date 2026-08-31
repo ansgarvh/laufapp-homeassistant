@@ -1,6 +1,17 @@
-# Laufapp v0.2.17
+# Laufapp v0.2.18
 
 Private, mobile-first Lauf-PWA für Home Assistant OS. Laufapp verbindet eine lokale Trainings-/Prognoseengine mit Apple-Health-Daten, Health Auto Export und einem optionalen OpenAI-Coach. Die Anwendung ist für einen einzelnen privaten Nutzer ausgelegt.
+
+
+## Neu in v0.2.18 – Wettkampfkalender mit A/B/C-Prioritäten
+
+- Mehrere **A-Rennen** können gleichzeitig hinterlegt werden. Bis zum jeweils chronologisch nächsten A-Rennen steuert ausschließlich dieses Rennen Periodisierung, Peak und Taper; erst danach übernimmt das folgende A-Rennen.
+- Nach einem A-Marathon schützt eine automatische **Post-Race-Recovery** die erste Folgewoche; bei engem Abstand zum nächsten A-Rennen folgt ein kontrollierter Wiedereinstieg/Taper statt eines neuen Aufbau-Blocks.
+- **B-Rennen** bleiben lokale Sekundärziele und ersetzen nur den Longrun ihrer Rennwoche.
+- **C-Rennen** sind Trainingswettkämpfe: kurze C-Rennen ersetzen eine Qualitätseinheit, längere C-Rennen eine lange Einheit; sie erzeugen keinen eigenen Taper und verändern keine vorherigen Wochen.
+- Harte **Vergangenheitssperre**: Änderungen am Rennkalender dürfen keine Trainingstage vor dem aktuellen Datum neu erzeugen, löschen oder umplanen. Auch ein manuell mit einem alten Startdatum ausgelöster Plan-Refresh wird auf heute und die Zukunft begrenzt.
+- A-Rennen über 5 km, 10 km und Halbmarathon werden in ihrer Rennwoche nun genauso zuverlässig als echte Wettkampfeinheit am tatsächlichen Renndatum erzeugt wie Marathon-A-Rennen.
+- Keine Datenbankschemamigration; bestehende Rennen erhalten weiterhin standardmäßig Priorität A, wenn noch keine Priorität gespeichert ist.
 
 
 ## Neu in v0.2.17 – verständliches Leistungsprofil
@@ -109,7 +120,7 @@ Ausführliche Details und verbleibende Risiken stehen in `SECURITY.md` und `NABU
 
 ## Persistenz
 
-Benutzerdaten liegen im persistenten Home-Assistant-`/data`-Bereich. v0.2.17 benötigt **keine Datenbankschemamigration**.
+Benutzerdaten liegen im persistenten Home-Assistant-`/data`-Bereich. v0.2.18 benötigt **keine Datenbankschemamigration**.
 
 ## OpenAI
 
@@ -132,4 +143,4 @@ export LAUFAPP_HEALTH_AUTO_EXPORT_TOKEN="$(python -c 'import secrets; print(secr
 uvicorn main_v0215:app --host 127.0.0.1 --port 8099 --no-proxy-headers
 ```
 
-Weitere Details: `SECURITY.md`, `NABU_CASA_HEALTH_SYNC.md`, `RELEASE_NOTES_v0.2.17.md`, `TRAINING_ENGINE.md`, `MIGRATIONS.md`.
+Weitere Details: `SECURITY.md`, `NABU_CASA_HEALTH_SYNC.md`, `RELEASE_NOTES_v0.2.18.md`, `TRAINING_ENGINE.md`, `MIGRATIONS.md`.

@@ -4,23 +4,23 @@ ROOT=Path(__file__).resolve().parents[1]
 
 def test_versions_and_assets():
     cfg=yaml.safe_load((ROOT/'laufapp/config.yaml').read_text())
-    assert cfg['version']=='0.2.17'
-    assert 'APP_VERSION = "0.2.17"' in (ROOT/'laufapp/app/main_v0217.py').read_text()
-    assert 'ARG BUILD_VERSION=0.2.17' in (ROOT/'laufapp/Dockerfile').read_text()
-    assert 'main_v0217:app' in (ROOT/'laufapp/run.sh').read_text()
-    assert '# Laufapp v0.2.17' in (ROOT/'README.md').read_text()
-    assert '## v0.2.17 – 2026-08-31' in (ROOT/'CHANGELOG.md').read_text()
-    assert (ROOT/'RELEASE_NOTES_v0.2.17.md').exists()
-    assert 'Laufapp v0.2.17' in (ROOT/'RELEASE_NOTES_v0.2.17.md').read_text()
+    assert cfg['version']=='0.2.18'
+    assert 'APP_VERSION = "0.2.18"' in (ROOT/'laufapp/app/main_v0218.py').read_text()
+    assert 'ARG BUILD_VERSION=0.2.18' in (ROOT/'laufapp/Dockerfile').read_text()
+    assert 'main_v0218:app' in (ROOT/'laufapp/run.sh').read_text()
+    assert '# Laufapp v0.2.18' in (ROOT/'README.md').read_text()
+    assert '## v0.2.18 – 2026-08-31' in (ROOT/'CHANGELOG.md').read_text()
+    assert (ROOT/'RELEASE_NOTES_v0.2.18.md').exists()
+    assert 'Laufapp v0.2.18' in (ROOT/'RELEASE_NOTES_v0.2.18.md').read_text()
     static=ROOT/'laufapp/app/static'
     for name in ['index.html','styles.css','bugfix.css','app.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','assets/bugfix.css','assets/v020.js','assets/v020.css','assets/v020_science.js','assets/v020_science.css','assets/v023_aggressiveness.js','assets/v025.js','assets/v025.css','assets/v0213.js','assets/v0213.css','assets/v0214.js','assets/v0214.css','assets/v0215.css','assets/v0217.css']:assert (static/name).exists()
     m=json.loads((static/'manifest.webmanifest').read_text());assert m['display']=='standalone'
     sw=(static/'sw.js').read_text()
-    assert "const CACHE='laufapp-v0.2.17'" in sw
+    assert "const CACHE='laufapp-v0.2.18'" in sw
     assert 'assets/v0213.js?v=0.2.13' in sw and 'assets/v0213.css?v=0.2.13' in sw and 'assets/v0215.css?v=0.2.15' in sw
     assert 'assets/v0214.js?v=0.2.14' not in sw and 'assets/v0214.css?v=0.2.14' not in sw
     index=(static/'index.html').read_text()
-    for asset in ['app.js?v=0.2.17','assets/bugfix.css?v=0.2.5','assets/v020.js?v=0.2.5','assets/v020_science.js?v=0.2.5','assets/v023_aggressiveness.js?v=0.2.5','assets/v025.js?v=0.2.5','assets/v025.css?v=0.2.5','assets/v0213.js?v=0.2.13','assets/v0213.css?v=0.2.13','assets/v0215.css?v=0.2.15','assets/v0217.css?v=0.2.17']:
+    for asset in ['app.js?v=0.2.18','assets/bugfix.css?v=0.2.5','assets/v020.css?v=0.2.18','assets/v020.js?v=0.2.18','assets/v020_science.js?v=0.2.5','assets/v023_aggressiveness.js?v=0.2.5','assets/v025.js?v=0.2.5','assets/v025.css?v=0.2.5','assets/v0213.js?v=0.2.13','assets/v0213.css?v=0.2.13','assets/v0215.css?v=0.2.15','assets/v0217.css?v=0.2.17']:
         assert asset in index
     races=(static/'assets/v020.js').read_text()
     science=(static/'assets/v020_science.js').read_text()
@@ -28,13 +28,18 @@ def test_versions_and_assets():
     v025=(static/'assets/v025.js').read_text()
     css025=(static/'assets/v025.css').read_text()
     v0213=(static/'assets/v0213.js').read_text()
-    assert 'A-Rennen' in races and 'B-Rennen' in races and 'api/v2/races' in races
+    assert all(label in races for label in ['A-Rennen','B-Rennen','C-Rennen','api/v2/races','Vergangene Trainingstage'])
     assert 'Planungsaggressivität' in science
     assert all(label in science for label in ['Konservativ','Moderat','Aggressiv'])
     assert 'Sehr aggressiv' in v023 and 'very_progressive' in v023 and '2,5 %' in v023
     assert 'Deine Bestzeiten' in v025 and 'improvement_since_best_seconds' in v025
     assert '--nav-safe-compact' in css025 and 'v025-best-card' in css025
     assert 'Trainingsentwicklung' in v0213 and 'api/progress/trends' in v0213
+    calendar=(ROOT/'laufapp/app/training_v020.py').read_text()
+    assert all(x in calendar for x in ['post_a_recovery','post_a_reentry','replan_existing_future_weeks','support_races_for_week','past_protected'])
+    planner=(ROOT/'laufapp/app/training_planner_v020.py').read_text()
+    assert 'Race week must produce the actual A-race for every supported distance' in planner
+    assert (ROOT/'tests/test_v0218_race_calendar.py').exists()
     subprocess.run(['node','--check',str(static/'app.js')],check=True)
     subprocess.run(['node','--check',str(static/'assets/v020.js')],check=True)
     subprocess.run(['node','--check',str(static/'assets/v020_science.js')],check=True)
@@ -61,7 +66,7 @@ def test_ha_app_config_and_health_auto_export_gateway():
     gateway=(ROOT/'laufapp/app/health_auto_export_gateway.py').read_text()
     assert '@app.post("/health-auto-export")' in gateway
     assert '@app.post("/home-assistant-relay")' in gateway
-    assert 'from main_v0217 import APP_VERSION' in gateway
+    assert 'from main_v0218 import APP_VERSION' in gateway
     assert 'LAUFAPP_HAE_RELAY_OK transport=nabu_casa' in gateway
     assert 'openapi_url=None' in gateway and 'Cache-Control' in gateway
     hae=(ROOT/'laufapp/app/health_auto_export_v027.py').read_text()
@@ -102,7 +107,7 @@ def test_direct_home_assistant_webhook_relay_is_pinned_and_bounded():
     assert (component/'__init__.py').exists() and (component/'manifest.json').exists()
     manifest=json.loads((component/'manifest.json').read_text())
     assert manifest['domain']=='laufapp_hae_relay'
-    assert manifest['version']=='0.2.17'
+    assert manifest['version']=='0.2.18'
     assert manifest['requirements']==[]
     assert 'webhook' in manifest['dependencies']
     source=(component/'__init__.py').read_text()

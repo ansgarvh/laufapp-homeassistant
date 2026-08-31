@@ -129,12 +129,13 @@ def test_v020_synthetic_end_to_end(setup_client):
     a2_date=(date.today()+timedelta(days=154)).isoformat()
     a2=client.post('/api/v2/races',json={'name':'Zweites A-Rennen','distance_km':42.195,'race_date':a2_date,'goal_seconds':11800,'priority':'A'})
     assert a2.status_code==201,a2.text
-    assert client.get('/api/settings').json()['plan_stale'] is True
+    assert client.get('/api/settings').json()['plan_stale'] is False
 
-    # Recalculate current future plan explicitly; user-owned rows remain protected
-    # by the underlying v0.1.9 refresh architecture.
+    # A-race calendar changes now re-align already generated future weeks
+    # immediately; historical dates remain protected by the planner itself.
     refreshed=client.post('/api/plan/refresh?weeks=4')
     assert refreshed.status_code==200,refreshed.text
+    assert refreshed.json().get('past_protected') is True
     assert client.get('/api/settings').json()['plan_stale'] is False
 
     b_ws=tv.base.week_start_for(date.today()+timedelta(days=42))
