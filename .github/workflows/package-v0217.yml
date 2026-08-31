@@ -1,0 +1,112 @@
+name: Package verified v0.2.17 release
+on:
+  push:
+    branches: [release/v0.2.17-packaging]
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact release commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: f8c6d2d9b479082eb4bc583cbde857afaacc0733
+          fetch-depth: 0
+      - name: Build release ZIP from exact merge commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "f8c6d2d9b479082eb4bc583cbde857afaacc0733"
+          git archive --format=zip \
+            --prefix=laufapp-homeassistant-v0.2.17/ \
+            --output=laufapp-homeassistant-v0.2.17.zip \
+            f8c6d2d9b479082eb4bc583cbde857afaacc0733
+          sha256sum laufapp-homeassistant-v0.2.17.zip > laufapp-homeassistant-v0.2.17.zip.sha256
+      - name: Re-open ZIP and release sanity check
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, json, zipfile
+
+          zip_path = Path('laufapp-homeassistant-v0.2.17.zip')
+          sha_path = Path('laufapp-homeassistant-v0.2.17.zip.sha256')
+          prefix = 'laufapp-homeassistant-v0.2.17/'
+          assert zipfile.is_zipfile(zip_path)
+          digest = hashlib.sha256(zip_path.read_bytes()).hexdigest()
+          assert digest == sha_path.read_text(encoding='utf-8').split()[0]
+
+          with zipfile.ZipFile(zip_path) as zf:
+              assert zf.testzip() is None
+              names = set(zf.namelist())
+              required = {
+                  prefix + 'laufapp/config.yaml',
+                  prefix + 'laufapp/Dockerfile',
+                  prefix + 'laufapp/run.sh',
+                  prefix + 'laufapp/app/main_v0217.py',
+                  prefix + 'laufapp/app/performance_profile_v0217.py',
+                  prefix + 'laufapp/app/static/app.js',
+                  prefix + 'laufapp/app/static/index.html',
+                  prefix + 'laufapp/app/static/sw.js',
+                  prefix + 'laufapp/app/static/assets/v0217.css',
+                  prefix + 'custom_components/laufapp_hae_relay/manifest.json',
+                  prefix + 'tests/test_v0217_performance_profile.py',
+                  prefix + 'PERFORMANCE_PROFILE.md',
+                  prefix + 'README.md',
+                  prefix + 'CHANGELOG.md',
+                  prefix + 'RELEASE_NOTES_v0.2.17.md',
+              }
+              missing = sorted(required - names)
+              assert not missing, missing
+              assert not any(n.endswith('.DS_Store') for n in names)
+              assert not any('v0217_patch_' in n or 'apply-v0217' in n for n in names)
+              assert prefix + '.github/workflows/package-v0217.yml' not in names
+
+              def text(path):
+                  return zf.read(prefix + path).decode('utf-8')
+
+              config = text('laufapp/config.yaml')
+              dockerfile = text('laufapp/Dockerfile')
+              runsh = text('laufapp/run.sh')
+              main = text('laufapp/app/main_v0217.py')
+              profile = text('laufapp/app/performance_profile_v0217.py')
+              appjs = text('laufapp/app/static/app.js')
+              index = text('laufapp/app/static/index.html')
+              sw = text('laufapp/app/static/sw.js')
+              docs = text('PERFORMANCE_PROFILE.md')
+              readme = text('README.md')
+              changelog = text('CHANGELOG.md')
+              manifest = json.loads(text('custom_components/laufapp_hae_relay/manifest.json'))
+
+              assert 'version: "0.2.17"' in config
+              assert 'ARG BUILD_VERSION=0.2.17' in dockerfile
+              assert 'main_v0217:app' in runsh
+              assert 'APP_VERSION = "0.2.17"' in main
+              assert 'performance_profile_v0217' in main
+              assert 'PROFILE_VERSION = 2' in profile
+              assert 'PROFILE_WINDOW_WEEKS = 8' in profile
+              assert 'Was bedeutet 0–100?' in appjs
+              assert 'Nicht direkt in den Score eingerechnet.' in appjs
+              assert 'Ausdauerbasis' in appjs and 'Speed-Ausdauer' in appjs and 'Schwellen-Ausdauer' in appjs
+              assert 'app.js?v=0.2.17' in index
+              assert 'assets/v0217.css?v=0.2.17' in index
+              assert "const CACHE='laufapp-v0.2.17'" in sw
+              assert 'keine Prozentangabe' in docs.lower() or 'keine Prozentangaben' in docs.lower() or 'nicht' in docs.lower()
+              assert readme.startswith('# Laufapp v0.2.17')
+              assert '## v0.2.17' in changelog
+              assert manifest.get('version') == '0.2.17'
+              assert 'share:rw' not in config
+              print(f'RELEASE_SANITY_OK entries={len(names)} sha256={digest}')
+          PY
+      - name: Upload verified release artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: laufapp-homeassistant-v0.2.17-release
+          path: |
+            laufapp-homeassistant-v0.2.17.zip
+            laufapp-homeassistant-v0.2.17.zip.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
