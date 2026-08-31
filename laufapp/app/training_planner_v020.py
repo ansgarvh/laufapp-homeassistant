@@ -216,12 +216,13 @@ class LongRunPlanner:
         previous=history[0] if history else None;previous_distance=float(previous["distance_km"]) if previous else float(actual["longest_4w"] or actual["longest_8w"] or 0);prev_details=previous.get("details",{}) if previous else {};previous_mp=float(prev_details.get("mp_km",0) or 0)
         max_long=min(float(prefs["max_long"]),total_km*min(.47,float(prefs["max_share"])+.03));base_distance=max(14,min(max_long,total_km*(.34 if phase is TrainingPhase.FOUNDATION else .38)))
         if previous_distance>0:base_distance=max(base_distance,min(max_long,previous_distance))
+        if phase is TrainingPhase.RACE:
+            load=self._load(dist,dist,"race",paces,10)
+            label=base.LABELS.get(round(dist,4),f"{dist:g} km")
+            return LongRunDecision(PlannedSession("race",f"WETTKAMPF · {label}",dist,"marathon","Wettkampf","Zielwettkampf","Kontrolliert eröffnen und Renntaktik/Verpflegung umsetzen.",PhysiologicalTarget.RACE,"race_target",WorkoutType.RACE.value,load,"Der Zielwettkampf ersetzt den Longrun und ist der zentrale Belastungsreiz der Woche.",{"mp_km":dist if dist>=40 else 0}),"race",previous_distance,previous_mp)
         if dist<40:
             distance=min(max_long,max(9,base_distance));load=self._load(distance,0,"easy",paces,3.5)
             return LongRunDecision(PlannedSession("long","LONGRUN · Easy",round(distance,1),"easy","3–4/10","Aerobe Ausdauer","Ruhig und gesprächsfähig; Verpflegung nach Bedarf üben.",PhysiologicalTarget.AEROBIC_BASE,"long_easy",WorkoutType.LONG_EASY.value,load,"Ziel ist kontinuierliche aerobe Belastung ohne zusätzlichen intensiven Reiz.",{"mp_km":0}),"distance_or_maintenance",previous_distance,previous_mp)
-        if phase is TrainingPhase.RACE:
-            load=self._load(dist,dist,"race",paces,10)
-            return LongRunDecision(PlannedSession("race","WETTKAMPF · Marathon",dist,"marathon","Wettkampf","Zielwettkampf","Kontrolliert eröffnen und Renntaktik/Fueling umsetzen.",PhysiologicalTarget.RACE,"race_marathon",WorkoutType.RACE.value,load,"Der Zielwettkampf ersetzt den Longrun und ist der zentrale Belastungsreiz der Woche.",{"mp_km":dist}),"race",previous_distance,previous_mp)
         if phase in {TrainingPhase.RECOVERY,TrainingPhase.TAPER} or readiness.level is ReadinessLevel.RED:
             ratio=.78 if phase is TrainingPhase.RECOVERY else .72 if phase is TrainingPhase.TAPER else .75;distance=min(max_long,max(12,(previous_distance or base_distance)*ratio));load=self._load(distance,0,"easy",paces,3)
             title="LONGRUN · Deload" if phase is TrainingPhase.RECOVERY else "LONGRUN · reduziert";why="Der Longrun wird bewusst gekürzt. Intensität bleibt niedrig, damit Ausdauer erhalten bleibt und gleichzeitig Ermüdung abgebaut werden kann."
