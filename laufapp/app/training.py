@@ -343,10 +343,37 @@ def move_workout(c,wid:int,new:date):
     c.execute("UPDATE workouts SET scheduled_date=?,week_start=?,manual_override=1,modified_by='user' WHERE id=?",(new.isoformat(),week_start_for(new).isoformat(),wid))
     return {'workout':_wdict(c.execute("SELECT * FROM workouts WHERE id=?",(wid,)).fetchone()),'warnings':[],'operation':'swap' if target else 'move'}
 
+AUTO_MATCH_MIN_DISTANCE_RATIO = 0.90
+
 def auto_match_run(c,run_id):
-    r=c.execute("SELECT * FROM runs WHERE id=?",(run_id,)).fetchone();day=parse_dt(r['started_at']).date().isoformat() if r else '' ;w=c.execute("SELECT * FROM workouts WHERE scheduled_date=? AND status='planned' ORDER BY ABS(distance_km-?) LIMIT 1",(day,float(r['distance_km']) if r else 0)).fetchone()
+    r=c.execute("SELECT * FROM runs WHERE id=?",(run_id,)).fetchone()
+    if not r:return None
+    already=c.execute("SELECT id FROM workouts WHERE linked_run_id=? ORDER BY id LIMIT 1",(run_id,)).fetchone()
+    if already:return int(already['id'])
+    day=parse_dt(r['started_at']).date().isoformat();run_km=float(r['distance_km'] or 0)
+    w=c.execute("SELECT * FROM workouts WHERE scheduled_date=? AND status='planned' AND linked_run_id IS NULL AND distance_km>0 AND ?>=distance_km*? ORDER BY ABS(distance_km-?),id LIMIT 1",(day,run_km,AUTO_MATCH_MIN_DISTANCE_RATIO,run_km)).fetchone()
     if not w:return None
     c.execute("UPDATE workouts SET status='completed',linked_run_id=? WHERE id=?",(run_id,w['id']));return int(w['id'])
+
+def run_link_info(c,run_id):
+    r=c.execute("SELECT * FROM runs WHERE id=?",(run_id,)).fetchone()
+    if not r:raise KeyError('Lauf nicht gefunden')
+    linked=c.execute("SELECT * FROM workouts WHERE linked_run_id=? ORDER BY id LIMIT 1",(run_id,)).fetchone()
+    day=parse_dt(r['started_at']).date().isoformat()
+    candidates=[] if linked else c.execute("SELECT * FROM workouts WHERE scheduled_date=? AND linked_run_id IS NULL ORDER BY ABS(distance_km-?),id",(day,float(r['distance_km'] or 0))).fetchall()
+    return {'run':dict(r),'linked_workout':_wdict(linked) if linked else None,'candidates':[_wdict(x) for x in candidates]}
+
+def link_run_to_workout(c,run_id,wid):
+    r=c.execute("SELECT * FROM runs WHERE id=?",(run_id,)).fetchone();w=c.execute("SELECT * FROM workouts WHERE id=?",(wid,)).fetchone()
+    if not r:raise KeyError('Lauf nicht gefunden')
+    if not w:raise KeyError('Training nicht gefunden')
+    existing=c.execute("SELECT id FROM workouts WHERE linked_run_id=? AND id!=? LIMIT 1",(run_id,wid)).fetchone()
+    if existing:raise ValueError('Dieser Lauf ist bereits mit einer anderen Aktivität verknüpft.')
+    if w['linked_run_id'] is not None and int(w['linked_run_id'])!=int(run_id):raise ValueError('Diese Aktivität ist bereits mit einem anderen Lauf verknüpft.')
+    day=parse_dt(r['started_at']).date().isoformat()
+    if w['scheduled_date']!=day:raise ValueError('Manuell können nur Lauf und Planaktivität desselben Tages verknüpft werden.')
+    c.execute("UPDATE workouts SET status='completed',linked_run_id=?,manual_override=1,modified_by='user' WHERE id=?",(run_id,wid))
+    return _wdict(c.execute("SELECT * FROM workouts WHERE id=?",(wid,)).fetchone())
 
 def guardrails(c,workouts):
     planned=sum(float(w['distance_km']) for w in workouts);long_km=sum(float(w['distance_km']) for w in workouts if w['workout_type'] in {'long','race'});share=long_km/planned if planned else 0;cap=float(get_setting(c,'max_long_run_share',.45));alerts=[]
