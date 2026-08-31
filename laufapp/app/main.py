@@ -203,10 +203,19 @@ def api_races():
 def api_race_add(p:RacePayload):
     if p.race_date<=date.today():raise HTTPException(400,'Das Wettkampfdatum muss in der Zukunft liegen.')
     with db_conn() as c:
-        if p.active:c.execute("UPDATE races SET active=0")
+        # Legacy UI compatibility: a newly added active race is an additional
+        # A-race, not a replacement for existing future races. The v0.2 planner
+        # picks the chronologically next A-race as the weekly focus.
         cur=c.execute("INSERT INTO races(name,distance_km,race_date,goal_seconds,target_source,active) VALUES(?,?,?,?, 'user',?)",(p.name,p.distance_km,p.race_date.isoformat(),p.goal_seconds,int(p.active)))
-        if p.active:mark_plan_stale(c,'Aktiver Wettkampf geändert')
-        return {'id':int(cur.lastrowid)}
+        rid=int(cur.lastrowid)
+        if p.active:
+            mapping=dict(get_setting(c,'race_priorities',{}) or {});mapping[str(rid)]='A';set_setting(c,'race_priorities',mapping)
+            try:
+                import training_v020 as calendar_training
+                calendar_training.replan_existing_future_weeks(c,date.today())
+            except ImportError:
+                mark_plan_stale(c,'A-Wettkampfplanung geändert')
+        return {'id':rid}
 @app.post('/api/races/{rid}/adopt-prediction')
 def api_adopt(rid:int):
     with db_conn() as c:

@@ -29,12 +29,12 @@ trap cleanup EXIT
 trap 'handle_signal SIGTERM 143' TERM
 trap 'handle_signal SIGINT 130' INT
 
-uvicorn main_v0217:app \
+uvicorn main_v0218:app \
   --host 0.0.0.0 --port 8099 \
   --no-proxy-headers --no-server-header \
   --limit-concurrency 64 --timeout-keep-alive 5 &
 MAIN_PID=$!
-echo "LAUFAPP_PROCESS_STARTED child=main pid=$MAIN_PID port=8099 version=0.2.17" >&2
+echo "LAUFAPP_PROCESS_STARTED child=main pid=$MAIN_PID port=8099 version=0.2.18" >&2
 
 READY=0
 for _ in $(seq 1 60); do
@@ -66,7 +66,7 @@ then
     --no-proxy-headers --no-server-header \
     --limit-concurrency 8 --timeout-keep-alive 5 &
   GATEWAY_PID=$!
-  echo "LAUFAPP_PROCESS_STARTED child=gateway pid=$GATEWAY_PID port=8100 version=0.2.17" >&2
+  echo "LAUFAPP_PROCESS_STARTED child=gateway pid=$GATEWAY_PID port=8100 version=0.2.18" >&2
 
   EXITED_PID=""
   set +e

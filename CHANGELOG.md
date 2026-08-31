@@ -1,5 +1,16 @@
 # Laufapp Changelog
 
+## v0.2.18 – 2026-08-31
+
+- Wettkampfkalender auf A/B/C-Prioritäten erweitert. Das chronologisch nächste A-Rennen steuert nur die Planung bis zu seinem Termin; spätere A-Rennen greifen nicht rückwärts in dessen Vorbereitung ein.
+- Post-A-Übergang ergänzt: nach einem A-Marathon erste Folgewoche als Easy-only Recovery, danach bei engem Abstand kontrollierter Wiedereinstieg/Taper auf das nächste A-Rennen.
+- B-Rennen bleiben lokale Longrun-Ersatzrennen; C-Rennen werden als lokale Trainingswettkämpfe ohne eigenen Taper integriert.
+- Harte Vergangenheitssperre in der Trainingsengine: vollständige vergangene Wochen sind immutable; in der aktuellen Woche werden nur Termine ab heute neu geplant. Plan-Refresh mit vergangenem Startdatum wird entsprechend begrenzt.
+- Bereits materialisierte zukünftige Wochen werden nach A-Rennkalenderänderungen automatisch ab heute neu ausgerichtet; noch nicht erzeugte Wochen wählen beim ersten Öffnen automatisch das passende A-Rennen.
+- Bestehenden Race-Week-Bug korrigiert: A-Rennen unter Marathon-Distanz (5 km/10 km/HM) werden nun als echte `race`-Einheit am tatsächlichen Renndatum und mit voller Renndistanz erzeugt.
+- Keine Datenbankschemamigration; HAE/Nabu/Ingress- und Security-Architektur unverändert.
+- Neue Regressionstests für A→A-Fokuswechsel, Marathon→HM-Recovery, C-Rennen, vollständige A-Renndistanz und unveränderbare Vergangenheit.
+
 ## v0.2.17 – 2026-08-31
 
 - Leistungsprofil auf transparente, strukturierte 0–100-Zielabdeckung umgestellt; Skala wird in der UI erklärt.
