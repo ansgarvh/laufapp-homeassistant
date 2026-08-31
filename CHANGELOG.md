@@ -1,5 +1,18 @@
 # Laufapp Changelog
 
+## v0.2.13 – 2026-08-30
+
+- Umfassende Security-/Bereinigungsrunde nach dem real bestätigten v0.2.12-HAE-Fix: keine Datenbankschemamigration und keine Änderung an Trainingsplanlogik oder bestehenden Nutzerdaten.
+- Öffentlichen Home-Assistant-HAE-Webhook gegen Resource-Consumption/Slow-Request-Angriffe gehärtet: 120 Sekunden Body-Read-Timeout, maximal 12 Requests pro Minute und maximal drei parallele Weiterleitungen; 16-MiB-Limit, POST-only, JSON-only, starke Webhook-ID, fester interner Zielhost und separater Laufapp-Token bleiben erhalten.
+- Hauptapp blockiert browserseitige Cross-Site-Schreibrequests über `Sec-Fetch-Site: cross-site` und setzt zusätzliche Browser-Sicherheitsheader (`nosniff`, `no-referrer`, Permissions-Policy und CSP für lokale Ressourcen).
+- Unnötige Home-Assistant-Berechtigung entfernt: der nur für den abgeschlossenen Einmal-Umzug benötigte `/share:rw`-Mount entfällt; der produktive `/api/system/prepare-repository-transfer`-Endpunkt wird nicht mehr registriert.
+- Coach-Historie serverseitig auf 1–200 Datensätze begrenzt; bestehende API-/Upload-/HAE-Mengenlimits bleiben erhalten.
+- Alte Jinja/`rest_command`-Relay-Beispiele sowie `.DS_Store`-Dateien aus dem Repository entfernt; `.gitignore` schützt lokale SQLite-/Secret-/Exportdateien künftig besser.
+- Security-CI um `pip check` und einen vollständigen Git-History-Secret-Scan über erreichbare Branches ergänzt; gesucht werden typische OpenAI-/GitHub-Tokens, JWTs, Private Keys und reale Nabu-Casa-Webhook-URLs. `pip-audit` und Bandit bleiben Release-Gates.
+- Unter **Fortschritt** neue 3-/6-/12-/24-Monats-Zeitachse mit Wochenaggregaten für Kilometer, distanzgewichtete Pace, Kadenz, Laufzeit, Anzahl/Ø Distanz/längsten Lauf, Herzfrequenz, RPE, Höhenmeter sowie – soweit vorhanden – Ruhepuls, HRV, Schlaf, Gewicht und VO₂max. Fehlende Werte bleiben Lücken; Roh-GPS-/Health-Zeitreihen werden für die Darstellung nicht an den Browser übertragen.
+- Neue Regressionstests prüfen Trendaggregation, Plausibilitätsfilter, neue Security-Header, Cross-Site-Block, entfernten Transfer-Endpunkt, History-Limit sowie HAE-Rate-/Slow-Body-Schutz.
+- Statisch/isoliert und in Linux/Docker zu verifizieren; reale Home-Assistant-OS-/Nabu-Casa-/Health-Auto-Export-iPhone-Integration muss nach Installation lokal bestätigt werden.
+
 ## v0.2.12 – 2026-08-30
 
 - Mit zwei realen Health-Auto-Export-JSON-v2-Workouts nachgewiesenen Importfehler behoben: Deutsche Laufworkouts heißen in den vorliegenden HAE-Daten `Outdoor Ausführen` und wurden vom bisherigen `run`/`lauf`-Namensfilter vollständig verworfen.
