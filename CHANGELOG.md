@@ -1,5 +1,15 @@
 # Laufapp Changelog
 
+## v0.2.17 – 2026-08-31
+
+- Leistungsprofil auf transparente, strukturierte 0–100-Zielabdeckung umgestellt; Skala wird in der UI erklärt.
+- Bezeichnungen präzisiert zu Ausdauerbasis, Speed-Ausdauer, Schwellen-Ausdauer, zielspezifischer Readiness und Trainingskontinuität.
+- Ausdauerbasis berücksichtigt acht abgeschlossene Wochen, Umfang, Zeit auf den Beinen und optional einen kleinen Easy-Pace/HF-Trend.
+- Readiness berücksichtigt Umfang, Longrun-Länge/-Wiederholung und spezifische Planerfüllung; Kontinuität berücksichtigt aktive Wochen, Laufhäufigkeit und Planerfüllung.
+- Apple-Health-Werte Ruhepuls, HRV, Schlaf und VO₂max werden separat als Kontext gezeigt und nicht als universeller Fitnesswert interpretiert.
+- Legacy-Profilschlüssel bleiben für ältere Frontend-/Coach-Aufrufer erhalten; keine Datenbankschemamigration.
+- Neue Regressionstests für Struktur, Skala, Teilkomponenten, Wettkampfdistanz-Label und UI-Erklärung.
+
 ## v0.2.16 – 2026-08-31
 
 - Auto-Matching nutzt eine asymmetrische Distanzregel: mindestens 90 % des Planwerts erforderlich; Überschreitungen sind unbegrenzt zulässig.
