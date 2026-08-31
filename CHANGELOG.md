@@ -1,5 +1,16 @@
 # Laufapp Changelog
 
+## v0.2.18 – 2026-08-31
+
+- Mehrere A-Rennen werden chronologisch behandelt: Das frühere A-Rennen bleibt bis zu seiner Rennwoche alleiniger Planfokus; spätere A-Ziele verändern keine davorliegenden Wochen.
+- Nach einem A-Rennen greift bei engem Abstand zum nächsten A-Ziel ein expliziter Recovery-/Übergangsblock, statt sofort den normalen Build des Folgerennens zu starten.
+- Bestehenden Fehler behoben, durch den A-Rennen unter Marathondistanz in der Rennwoche als Longrun statt als Zielwettkampf behandelt werden konnten. 5 km, 10 km, Halbmarathon und Marathon werden jetzt am exakten Renndatum und mit vollständiger Distanz geplant.
+- Wettkampfprioritäten auf A/B/C erweitert: B ersetzt weiterhin ausschließlich den Longrun der Rennwoche; C ersetzt eine Qualitätseinheit (ersatzweise Easy) und lässt Longrun sowie A-Periodisierung unverändert.
+- Rennanlage um separates Dropdown **Wettkampfart** mit 5 km, 10 km, Halbmarathon und Marathon erweitert. Die Auswahl belegt die Distanz vor; die Distanz bleibt unabhängig editierbar.
+- Distanzfeld von Browser-`number` auf dezimales Texteingabefeld mit `inputmode=decimal` umgestellt; deutsches Komma und Punkt werden akzeptiert.
+- Wettkampfart wird dauerhaft kompatibel neben der bestehenden Prioritätszuordnung gespeichert; keine Datenbankschemamigration.
+- Neue Regressionen prüfen den exakten Fall zweier A-Rennen mit 19 Tagen Abstand, unveränderte Wochen vor dem ersten A-Rennen, Recovery/Taper-Handover, A-Halbmarathon-Rennwoche, C-Rennen sowie Komma-/Dropdown-UI.
+
 ## v0.2.17 – 2026-08-31
 
 - Leistungsprofil auf transparente, strukturierte 0–100-Zielabdeckung umgestellt; Skala wird in der UI erklärt.

@@ -1,6 +1,6 @@
 'use strict';
-const CACHE='laufapp-v0.2.17';
-const staticUrls=()=>['./','styles.css?v=0.2.5','app.js?v=0.2.17','manifest.webmanifest?v=0.2.5','icon-192.png?v=0.2.5','assets/bugfix.css?v=0.2.5','assets/v020.css?v=0.2.5','assets/v020.js?v=0.2.5','assets/v020_science.css?v=0.2.5','assets/v020_science.js?v=0.2.5','assets/v023_aggressiveness.js?v=0.2.5','assets/v025.css?v=0.2.5','assets/v025.js?v=0.2.5','assets/v0213.css?v=0.2.13','assets/v0213.js?v=0.2.13','assets/v0215.css?v=0.2.15','assets/v0217.css?v=0.2.17'].map(p=>new URL(p,self.registration.scope).toString());
+const CACHE='laufapp-v0.2.18';
+const staticUrls=()=>['./','styles.css?v=0.2.5','app.js?v=0.2.18','manifest.webmanifest?v=0.2.5','icon-192.png?v=0.2.5','assets/bugfix.css?v=0.2.5','assets/v020.css?v=0.2.18','assets/v020.js?v=0.2.18','assets/v020_science.css?v=0.2.5','assets/v020_science.js?v=0.2.5','assets/v023_aggressiveness.js?v=0.2.5','assets/v025.css?v=0.2.5','assets/v025.js?v=0.2.5','assets/v0213.css?v=0.2.13','assets/v0213.js?v=0.2.13','assets/v0215.css?v=0.2.15','assets/v0217.css?v=0.2.17'].map(p=>new URL(p,self.registration.scope).toString());
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(c=>c.addAll(staticUrls())).catch(()=>{}));self.skipWaiting();});
 self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim();});
 self.addEventListener('fetch',event=>{

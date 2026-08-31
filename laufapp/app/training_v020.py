@@ -13,7 +13,12 @@ VERSION = "0.2.0"
 
 
 def _priority_map(c):
-    raw=get_setting(c,"race_priorities",{}) or {};return {str(k):("B" if str(v).upper()=="B" else "A") for k,v in dict(raw).items()}
+    raw=get_setting(c,"race_priorities",{}) or {}
+    out={}
+    for k,v in dict(raw).items():
+        priority=str(v).upper()
+        out[str(k)]=priority if priority in {"A","B","C"} else "A"
+    return out
 
 def race_priority(c,race_id:int)->str:return _priority_map(c).get(str(int(race_id)),"A")
 
@@ -33,6 +38,15 @@ def b_races_for_week(c,ws:date):
     end=ws+timedelta(days=6);priorities=_priority_map(c)
     return [r for r in c.execute("SELECT * FROM races WHERE active=1 AND race_date BETWEEN ? AND ? ORDER BY race_date,id",(ws.isoformat(),end.isoformat())).fetchall() if priorities.get(str(int(r["id"])),"A")=="B"]
 
+def c_races_for_week(c,ws:date):
+    end=ws+timedelta(days=6);priorities=_priority_map(c)
+    return [r for r in c.execute("SELECT * FROM races WHERE active=1 AND race_date BETWEEN ? AND ? ORDER BY race_date,id",(ws.isoformat(),end.isoformat())).fetchall() if priorities.get(str(int(r["id"])),"A")=="C"]
+
+def previous_a_race(c,ref:date):
+    priorities=_priority_map(c)
+    rows=c.execute("SELECT * FROM races WHERE active=1 AND race_date<? ORDER BY race_date DESC,id DESC",(ref.isoformat(),)).fetchall()
+    return next((r for r in rows if priorities.get(str(int(r["id"])),"A")=="A"),None)
+
 
 def _readiness(c,ws:date)->RecoveryState:
     # Future weeks use the latest known state. Existing weeks are never silently
@@ -48,7 +62,25 @@ def _block_state(race,ws:date,phase:str):
     pos,cycle=block_position(race,ws,p);return {"cycle":cycle or None,"position":pos if cycle else None,"recovery":bool(cycle and pos==0)}
 
 def _weekly_target(c,race,ws:date):
-    total,phase=weekly_target(c,race,ws,_readiness(c,ws));return total,phase.value
+    readiness=_readiness(c,ws)
+    total,phase=weekly_target(c,race,ws,readiness)
+    previous=previous_a_race(c,ws)
+    if previous and phase is not TrainingPhase.RACE:
+        days_since=(ws-date.fromisoformat(previous["race_date"])).days
+        days_to_next=(date.fromisoformat(race["race_date"])-ws).days
+        prefs=base._prefs(c,float(race["distance_km"]))
+        established=float(base.established_volume(c,ws)["km"] or prefs["baseline"])
+        if 1<=days_since<=7:
+            phase=TrainingPhase.RECOVERY
+            total=min(total,max(14.0,established*.58))
+        elif 8<=days_since<=14:
+            if days_to_next<=14:
+                phase=TrainingPhase.TAPER
+                total=min(total,max(14.0,established*.62))
+            else:
+                phase=TrainingPhase.RECOVERY
+                total=min(total,max(14.0,established*.72))
+    return round(total,1),phase.value
 
 def automatic_max_weekly_km(c,race=None,ref:date|None=None):
     race=race or current_race(c,ref);return science_auto_max(c,race,ref,_readiness(c,ref or date.today()))
@@ -58,35 +90,56 @@ def _configured_dates(c,ws:date)->list[date]:
     days=sorted(set(int(x) for x in get_setting(c,"training_days",[1,3,4,6]) if 0<=int(x)<=6));days=days if 3<=len(days)<=7 else [1,3,4,6];return [ws+timedelta(days=d) for d in days]
 
 
-def _b_race_session(c,b,original_long:PlannedSession)->PlannedSession:
-    distance=float(b["distance_km"]);duration=float(b["goal_seconds"])/60;goal_pace=float(b["goal_seconds"])/max(distance,.1)
+def _race_load(distance:float,goal_seconds:float,priority:str)->TrainingLoad:
+    duration=goal_seconds/60;ratio=goal_seconds/max(distance,.1)
     if distance<=10:high,moderate=duration*.72,duration*.18
     elif distance<=25:high,moderate=duration*.25,duration*.60
     else:high,moderate=duration*.10,duration*.70
-    low=max(0,duration-high-moderate);load=TrainingLoad(distance,duration,"race",low,moderate,high,moderate+high,moderate,high,0,0,0,9,round(low+1.65*moderate+2.35*high+24,1))
+    if priority=="C":high*=.72;moderate*=.90
+    low=max(0,duration-high-moderate)
+    rpe=9 if priority=="B" else 7.5
+    return TrainingLoad(distance,duration,"race",low,moderate,high,moderate+high,moderate,high,0,0,0,rpe,round(low+1.65*moderate+2.35*high+24,1))
+
+def _b_race_session(c,b,original_long:PlannedSession)->PlannedSession:
+    distance=float(b["distance_km"]);goal=float(b["goal_seconds"]);goal_pace=goal/max(distance,.1);load=_race_load(distance,goal,"B")
     return PlannedSession("race",f"B-RENNEN · {b['name']}",distance,"b_race","Wettkampf","B-Rennen","Wettkampf kontrolliert laufen; keine zusätzliche harte Ersatz-Einheit in derselben Woche.",PhysiologicalTarget.RACE,"b_race",WorkoutType.RACE.value,load,"Das B-Rennen ersetzt ausschließlich den Longrun dieser Woche. Die übrige Periodisierung bleibt auf das A-Rennen ausgerichtet.",{"replaced_long_run_km":original_long.distance_km,"goal_pace_s_per_km":round(goal_pace,1)})
 
+def _c_race_session(c,race,replaced:PlannedSession)->PlannedSession:
+    distance=float(race["distance_km"]);goal=float(race["goal_seconds"]);goal_pace=goal/max(distance,.1);load=_race_load(distance,goal,"C")
+    return PlannedSession("race",f"C-RENNEN · {race['name']}",distance,"c_race","7–8/10","C-Rennen","Als kontrollierten Trainingswettkampf laufen. Kein zusätzlicher Taper und kein All-out-Zwang.",PhysiologicalTarget.RACE,"c_race",WorkoutType.RACE.value,load,"Das C-Rennen ersetzt nur eine strukturierte Einheit seiner Rennwoche. Der A-Rennen-Aufbau und der Longrun bleiben ansonsten unverändert.",{"replaced_workout_type":replaced.workout_type,"replaced_workout_km":replaced.distance_km,"goal_pace_s_per_km":round(goal_pace,1)})
 
 def _week_sessions(c,race,ws:date,phase:str,total:float):
     readiness=_readiness(c,ws)
     try:phase_enum=TrainingPhase(phase)
     except ValueError:phase_enum=phase_for_week(race,ws)[0]
     decision=build_week_sessions(c,race,ws,total,phase_enum,readiness);sessions=list(decision.sessions);dates=_configured_dates(c,ws);paces=training_paces(c,race)
-    zones={"easy":paces["easy"],"steady":paces["steady"],"marathon":paces["marathon"],"goal":paces["marathon"],"threshold":paces["threshold"],"interval":paces["interval"]};equivalent_by_title={};b_meta=None
-    b_races=b_races_for_week(c,ws)
+    zones={"easy":paces["easy"],"steady":paces["steady"],"marathon":paces["marathon"],"goal":paces["marathon"],"threshold":paces["threshold"],"interval":paces["interval"]};equivalent_by_title={};secondary_meta=None
+    b_races=b_races_for_week(c,ws);c_races=c_races_for_week(c,ws)
     if b_races and phase_enum is not TrainingPhase.RACE:
-        b=b_races[0];long_idx=next((i for i,s in enumerate(sessions) if s.workout_type=="long"),None)
-        if long_idx is not None:
-            original=sessions[long_idx];original_date=dates[long_idx];race_day=date.fromisoformat(b["race_date"]);collision=next((i for i,d in enumerate(dates) if i!=long_idx and d==race_day),None)
-            if collision is not None:dates[collision]=original_date
-            dates[long_idx]=race_day;race_session=_b_race_session(c,b,original);sessions[long_idx]=race_session;zones["b_race"]=(float(b["goal_seconds"])/float(b["distance_km"])-5,float(b["goal_seconds"])/float(b["distance_km"])+5);equivalent_by_title[race_session.title]=original.distance_km;b_meta={"id":int(b["id"]),"name":b["name"],"race_date":b["race_date"],"distance_km":float(b["distance_km"]),"goal_seconds":int(b["goal_seconds"]),"replaced_long_run_km":round(original.distance_km,1)}
+        b=b_races[0];replace_idx=next((i for i,s in enumerate(sessions) if s.workout_type=="long"),None)
+        priority="B"
+    elif c_races and phase_enum is not TrainingPhase.RACE:
+        b=c_races[0];replace_idx=next((i for i,s in enumerate(sessions) if s.workout_type=="quality"),None)
+        if replace_idx is None:replace_idx=next((i for i,s in enumerate(sessions) if s.workout_type=="easy"),None)
+        priority="C"
+    else:
+        b=None;replace_idx=None;priority=None
+    if b is not None and replace_idx is not None:
+        original=sessions[replace_idx];original_date=dates[replace_idx];race_day=date.fromisoformat(b["race_date"]);collision=next((i for i,d in enumerate(dates) if i!=replace_idx and d==race_day),None)
+        if collision is not None:dates[collision]=original_date
+        dates[replace_idx]=race_day
+        race_session=_b_race_session(c,b,original) if priority=="B" else _c_race_session(c,b,original)
+        sessions[replace_idx]=race_session;zone_key="b_race" if priority=="B" else "c_race"
+        zones[zone_key]=(float(b["goal_seconds"])/float(b["distance_km"])-5,float(b["goal_seconds"])/float(b["distance_km"])+5)
+        equivalent_by_title[race_session.title]=original.distance_km
+        secondary_meta={"id":int(b["id"]),"name":b["name"],"race_date":b["race_date"],"distance_km":float(b["distance_km"]),"goal_seconds":int(b["goal_seconds"]),"priority":priority,"replaced_km":round(original.distance_km,1),"replaced_workout_type":original.workout_type}
     decision=WeeklyPlanDecision(tuple(sessions),decision.phase,decision.readiness,projected_rolling_distribution(c,ws,sessions),decision.physiological_focus)
-    return dates,sessions,zones,equivalent_by_title,b_meta,decision
-
+    return dates,sessions,zones,equivalent_by_title,secondary_meta,decision
 
 def plan_basis(c,ws,race,total,phase):
-    ev=base.established_volume(c,ws);lh=base.long_run_history(c,ws);weeks=max(0,(date.fromisoformat(race["race_date"])-ws).days//7);core=phase_for_week(race,ws)[0];block=_block_state(race,ws,core.value);b=b_races_for_week(c,ws);readiness=_readiness(c,ws);paces=training_paces(c,race)
-    return {"established_weekly_km":ev["km"] or base._prefs(c,float(race["distance_km"]))["baseline"],"trend":ev["trend"],"longest_recent_km":lh["longest_8w"],"phase":phase,"weeks_to_race":weeks,"planned_weekly_km":round(total,1),"current_partial_km":ev["current_partial_km"],"focus_race_id":int(race["id"]),"focus_race_name":race["name"],"block_position":block["position"],"block_cycle":block["cycle"],"readiness":readiness.as_dict(),"training_paces":{k:v for k,v in paces.items() if not isinstance(v,tuple)},"b_race":{"id":int(b[0]["id"]),"name":b[0]["name"],"race_date":b[0]["race_date"]} if b else None}
+    ev=base.established_volume(c,ws);lh=base.long_run_history(c,ws);weeks=max(0,(date.fromisoformat(race["race_date"])-ws).days//7);core=phase_for_week(race,ws)[0];block=_block_state(race,ws,core.value);b=b_races_for_week(c,ws);cr=c_races_for_week(c,ws);readiness=_readiness(c,ws);paces=training_paces(c,race);previous=previous_a_race(c,ws)
+    days_since_previous=(ws-date.fromisoformat(previous["race_date"])).days if previous else None
+    return {"established_weekly_km":ev["km"] or base._prefs(c,float(race["distance_km"]))["baseline"],"trend":ev["trend"],"longest_recent_km":lh["longest_8w"],"phase":phase,"weeks_to_race":weeks,"planned_weekly_km":round(total,1),"current_partial_km":ev["current_partial_km"],"focus_race_id":int(race["id"]),"focus_race_name":race["name"],"block_position":block["position"],"block_cycle":block["cycle"],"readiness":readiness.as_dict(),"training_paces":{k:v for k,v in paces.items() if not isinstance(v,tuple)},"b_race":{"id":int(b[0]["id"]),"name":b[0]["name"],"race_date":b[0]["race_date"]} if b else None,"c_race":{"id":int(cr[0]["id"]),"name":cr[0]["name"],"race_date":cr[0]["race_date"]} if cr else None,"previous_a_race":{"id":int(previous["id"]),"name":previous["name"],"race_date":previous["race_date"],"days_since":days_since_previous} if previous and days_since_previous is not None and days_since_previous<=14 else None}
 
 
 def _scaled_load_dict(load:TrainingLoad,factor:float)->dict:
@@ -113,7 +166,7 @@ def generate_week(c,ws:date|None=None,force=False):
     if not race:return [base._wdict(r) for r in existing]
     if force:
         c.execute("DELETE FROM workouts WHERE origin_week_start=? AND scheduled_date>=? AND status='planned' AND linked_run_id IS NULL AND COALESCE(manual_override,0)=0",(key,date.today().isoformat()));c.execute("DELETE FROM plan_reviews WHERE week_start=?",(key,))
-    native_rows=c.execute("SELECT * FROM workouts WHERE origin_week_start=? ORDER BY scheduled_date,id",(key,)).fetchall();total,phase=_weekly_target(c,race,ws);dates,sessions,zones,equivalent,b_meta,decision=_week_sessions(c,race,ws,phase,total);templates=[s.legacy_tuple() for s in sessions];take=_session_lookup(templates,sessions)
+    native_rows=c.execute("SELECT * FROM workouts WHERE origin_week_start=? ORDER BY scheduled_date,id",(key,)).fetchall();total,phase=_weekly_target(c,race,ws);dates,sessions,zones,equivalent,secondary_meta,decision=_week_sessions(c,race,ws,phase,total);templates=[s.legacy_tuple() for s in sessions];take=_session_lookup(templates,sessions)
     remaining=base._remaining_template_slots(dates,templates,native_rows);visible=c.execute("SELECT * FROM workouts WHERE scheduled_date BETWEEN ? AND ? ORDER BY scheduled_date,id",(key,(ws+timedelta(days=6)).isoformat())).fetchall();occupied={r["scheduled_date"] for r in visible};preserved=sum(float(r["distance_km"] or 0) for r in visible);candidates=base._schedule_remaining_slots(ws,remaining,occupied)
     equivalent_candidate=sum(float(equivalent.get(t[1],t[2])) for _,t in candidates);remaining_km=max(0,total-preserved);scale=min(1,remaining_km/equivalent_candidate) if equivalent_candidate>0 else 0;generation=datetime.now(timezone.utc).isoformat();basis=plan_basis(c,ws,race,total,phase)
     for scheduled,t in candidates:
@@ -124,7 +177,9 @@ def generate_week(c,ws:date|None=None,force=False):
         if session:
             details.update(session.metadata);details["mp_km"]=round(float(session.metadata.get("mp_km",0) or 0)*dose,2)
         if typ=="race":
-            if fixed and b_meta:details.update({"race_id":b_meta["id"],"race_priority":"B","goal_seconds":b_meta["goal_seconds"],"replaced_long_run_km":b_meta["replaced_long_run_km"]})
+            if fixed and secondary_meta:
+                details.update({"race_id":secondary_meta["id"],"race_priority":secondary_meta["priority"],"goal_seconds":secondary_meta["goal_seconds"],"replaced_workout_km":secondary_meta["replaced_km"],"replaced_workout_type":secondary_meta["replaced_workout_type"]})
+                if secondary_meta["priority"]=="B":details["replaced_long_run_km"]=secondary_meta["replaced_km"]
             else:details.update({"race_id":int(race["id"]),"race_priority":"A","goal_seconds":int(race["goal_seconds"])})
         c.execute("INSERT INTO workouts(week_start,origin_week_start,scheduled_date,workout_type,title,distance_km,pace_low_s_per_km,pace_high_s_per_km,details_json,status,manual_override,modified_by,generation_version,plan_generation_id) VALUES(?,?,?,?,?,?,?,?,?,'planned',0,'engine',?,?)",(key,key,scheduled.isoformat(),typ,title,round(effective,1),low,high,json.dumps(details,ensure_ascii=False),VERSION,generation))
     if force:set_setting(c,"plan_stale",False);set_setting(c,"plan_stale_reason","")

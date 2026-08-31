@@ -16,6 +16,10 @@
   const secondsText = v => { let s=Math.round(Number(v)||0),h=Math.floor(s/3600),m=Math.floor((s%3600)/60),x=s%60; return h?`${h}:${String(m).padStart(2,'0')}:${String(x).padStart(2,'0')}`:`${m}:${String(x).padStart(2,'0')}`; };
   const durationFromInput = v => { const p=String(v||'').trim().split(':').map(Number); if(p.some(Number.isNaN)||p.length<2||p.length>3)return null; return p.length===2?p[0]*60+p[1]:p[0]*3600+p[1]*60+p[2]; };
   const distName = d => Math.abs(d-5)<.2?'5 km':Math.abs(d-10)<.2?'10 km':Math.abs(d-21.0975)<.3?'Halbmarathon':Math.abs(d-42.195)<.4?'Marathon':`${fmt1(d)} km`;
+  const parseRaceDistance = v => { const n=Number(String(v??'').trim().replace(',', '.')); return Number.isFinite(n)?n:null; };
+  const raceTypeDistance = { '5k':5, '10k':10, 'half_marathon':21.0975, 'marathon':42.195 };
+  const raceTypeLabel = { '5k':'5 km', '10k':'10 km', 'half_marathon':'Halbmarathon', 'marathon':'Marathon' };
+  const distanceInputText = v => String(Number(v??42.195)).replace('.', ',');
 
   async function api(path, options={}) {
     const init={...options,headers:{...(options.headers||{})}};
@@ -61,8 +65,8 @@
       : 'Laufapp-Empfehlung: noch nicht genügend Leistungsdaten';
     const past=dateObj(r.race_date)<dateObj(new Date().toISOString().slice(0,10));
     return `<article class="card v020-race-card ${past?'is-past':''}" data-race-id="${r.id}">
-      <div class="v020-race-head"><div><span class="v020-race-badge ${r.priority==='A'?'a':'b'}">${esc(r.priority)}-Rennen</span>${r.is_focus?'<span class="pill good">Planfokus</span>':''}</div><strong>${esc(r.name)}</strong></div>
-      <div class="v020-race-meta"><span>${niceDate(r.race_date)}</span><span>${esc(distName(Number(r.distance_km)))}</span><span>Ziel ${esc(secondsText(r.goal_seconds))}</span></div>
+      <div class="v020-race-head"><div><span class="v020-race-badge ${String(r.priority||'A').toLowerCase()}">${esc(r.priority)}-Rennen</span>${r.is_focus?'<span class="pill good">Planfokus</span>':''}</div><strong>${esc(r.name)}</strong></div>
+      <div class="v020-race-meta"><span>${niceDate(r.race_date)}</span><span>${esc(raceTypeLabel[r.race_type]||distName(Number(r.distance_km)))}</span><span>${esc(fmt1(r.distance_km))} km</span><span>Ziel ${esc(secondsText(r.goal_seconds))}</span></div>
       <div class="v020-race-rec">${recommendation}</div>
       <div class="button-row"><button class="button" data-race-edit="${r.id}" type="button">Bearbeiten</button><button class="button danger" data-race-delete="${r.id}" type="button">Löschen</button></div>
     </article>`;
@@ -78,7 +82,7 @@
       const section=document.createElement('section');
       section.id='v020-races'; section.className='section';
       section.innerHTML=`<div class="section-head"><h2>Rennen</h2><button class="link" id="v020-add-race" type="button">Rennen hinzufügen</button></div>
-        <div class="v020-race-help"><strong>A-Rennen</strong> steuern Periodisierung, Peak und Taper. <strong>B-Rennen</strong> ersetzen nur den Longrun ihrer Rennwoche; die Tage und Wochen davor bleiben unverändert.</div>
+        <div class="v020-race-help"><strong>A-Rennen</strong> steuern Periodisierung, Peak und Taper. Mehrere A-Rennen werden chronologisch fokussiert; nach einem A-Rennen folgt vor dem nächsten Ziel zuerst Erholung. <strong>B-Rennen</strong> ersetzen den Longrun ihrer Rennwoche. <strong>C-Rennen</strong> ersetzen nur eine strukturierte Einheit und verändern die vorherigen Wochen nicht.</div>
         <div class="v020-race-list">${races.length?races.map(raceCard).join(''):'<article class="card empty"><p>Noch kein Rennen hinterlegt.</p></article>'}</div>`;
       const firstSection=screen.querySelector('section');
       if(firstSection?.nextSibling) firstSection.parentNode.insertBefore(section,firstSection.nextSibling); else screen.appendChild(section);
@@ -94,19 +98,21 @@
   }
 
   function raceTypeHelp(priority){
-    return priority==='A'
-      ? 'A-Rennen: Der Trainingsplan wird auf dieses Rennen optimiert. Das nächste zukünftige A-Rennen ist der aktuelle Planfokus.'
-      : 'B-Rennen: Ersetzt ausschließlich den Longrun in dieser Rennwoche. Kein zusätzlicher Taper und keine Anpassung der vorherigen Tage oder Wochen.';
+    if(priority==='A')return 'A-Rennen: Der Trainingsplan wird auf dieses Rennen optimiert. Bei mehreren A-Rennen steuert immer das nächste A-Rennen; nach dessen Wettkampf wird automatisch auf das folgende A-Ziel mit Erholungs-/Übergangsblock gewechselt.';
+    if(priority==='B')return 'B-Rennen: Ersetzt ausschließlich den Longrun in dieser Rennwoche. Kein zusätzlicher Taper und keine Anpassung der vorherigen Tage oder Wochen.';
+    return 'C-Rennen: Trainingswettkampf. Ersetzt nur eine Qualitätseinheit (sonst einen Easy Run) in dieser Woche; Longrun und A-Rennen-Periodisierung bleiben erhalten.';
   }
 
   function openRaceModal(race=null){
     const tomorrow=new Date(); tomorrow.setDate(tomorrow.getDate()+1); const min=tomorrow.toISOString().slice(0,10);
     const defaultDate=race?.race_date||(()=>{const d=new Date();d.setDate(d.getDate()+30);return d.toISOString().slice(0,10)})();
     const priority=race?.priority||'A';
+    const selectedRaceType=race?.race_type||'marathon';
     modal(race?'Rennen bearbeiten':'Rennen hinzufügen',`<form class="form-grid" id="v020-race-form">
       <div class="grid2"><label class="field"><span>Wettkampf</span><input class="input" name="name" value="${esc(race?.name||'')}" required maxlength="120"></label><label class="field"><span>Datum</span><input class="input" type="date" name="date" value="${esc(defaultDate)}" min="${min}" required></label></div>
-      <div class="grid2"><label class="field"><span>Distanz</span><div class="input-unit"><input class="input" type="number" name="distance" value="${race?.distance_km??42.195}" min="1.01" max="100" step="0.001" required><span>km</span></div></label><label class="field"><span>Typ</span><select class="select" name="priority"><option value="A" ${priority==='A'?'selected':''}>A-Rennen</option><option value="B" ${priority==='B'?'selected':''}>B-Rennen</option></select></label></div>
-      <label class="field"><span>Zielzeit (hh:mm:ss)</span><input class="input" name="goal" value="${esc(secondsText(race?.goal_seconds||12600))}" required pattern="[0-9:]+"><small class="v020-goal-rec" id="v020-goal-rec">Laufapp-Empfehlung wird geladen …</small><button class="link v020-adopt-rec" id="v020-adopt-rec" type="button" hidden>Empfehlung übernehmen</button></label>
+      <div class="grid2"><label class="field"><span>Wettkampfart</span><select class="select" name="race_type"><option value="5k" ${selectedRaceType==='5k'?'selected':''}>5 km</option><option value="10k" ${selectedRaceType==='10k'?'selected':''}>10 km</option><option value="half_marathon" ${selectedRaceType==='half_marathon'?'selected':''}>Halbmarathon</option><option value="marathon" ${selectedRaceType==='marathon'?'selected':''}>Marathon</option></select></label><label class="field"><span>Distanz</span><div class="input-unit"><input class="input" type="text" inputmode="decimal" autocomplete="off" name="distance" value="${esc(distanceInputText(race?.distance_km??42.195))}" required><span>km</span></div><small>Komma oder Punkt möglich, z. B. 21,0975.</small></label></div>
+      <div class="grid2"><label class="field"><span>Priorität</span><select class="select" name="priority"><option value="A" ${priority==='A'?'selected':''}>A-Rennen</option><option value="B" ${priority==='B'?'selected':''}>B-Rennen</option><option value="C" ${priority==='C'?'selected':''}>C-Rennen</option></select></label><label class="field"><span>Zielzeit (hh:mm:ss)</span><input class="input" name="goal" value="${esc(secondsText(race?.goal_seconds||12600))}" required pattern="[0-9:]+"></label></div>
+      <div><small class="v020-goal-rec" id="v020-goal-rec">Laufapp-Empfehlung wird geladen …</small><button class="link v020-adopt-rec" id="v020-adopt-rec" type="button" hidden>Empfehlung übernehmen</button></div>
       <div class="v020-race-type-help" id="v020-race-type-help">${esc(raceTypeHelp(priority))}</div>
       <button class="button primary" type="submit">${race?'Rennen speichern':'Rennen hinzufügen'}</button>
     </form>`,m=>{
@@ -114,17 +120,19 @@
       let recommendation=null,timer=null;
       const loadRecommendation=async()=>{
         clearTimeout(timer);timer=setTimeout(async()=>{
-          const distance=Number(form.distance.value);if(!distance||distance<=1)return;
+          const distance=parseRaceDistance(form.distance.value);if(!distance||distance<=1)return;
           try{const r=await api(`api/v2/races/recommendation?distance_km=${encodeURIComponent(distance)}`);recommendation=r.available?r:null;rec.innerHTML=recommendation?`Laufapp-Empfehlung aktuell: <strong>${esc(r.predicted_time)}</strong>${r.range_text?` · Bereich ${esc(r.range_text)}`:''}`:'Laufapp-Empfehlung: noch nicht genügend Leistungsdaten';adopt.hidden=!recommendation;}catch{rec.textContent='Laufapp-Empfehlung aktuell nicht verfügbar';adopt.hidden=true;}
         },120);
       };
       form.distance.addEventListener('input',loadRecommendation);
+      form.race_type.addEventListener('change',()=>{form.distance.value=distanceInputText(raceTypeDistance[form.race_type.value]);loadRecommendation();});
       form.priority.addEventListener('change',()=>help.textContent=raceTypeHelp(form.priority.value));
       adopt.addEventListener('click',()=>{if(recommendation)form.goal.value=secondsText(recommendation.predicted_seconds)});
       loadRecommendation();
       form.addEventListener('submit',async e=>{
         e.preventDefault();const goal=durationFromInput(form.goal.value);if(!goal)return toast('Bitte eine gültige Zielzeit eingeben.',true);
-        const payload={name:form.name.value.trim(),distance_km:Number(form.distance.value),race_date:form.date.value,goal_seconds:goal,priority:form.priority.value};
+        const distance=parseRaceDistance(form.distance.value);if(!distance||distance<=1||distance>100)return toast('Bitte eine gültige Distanz zwischen 1 und 100 km eingeben.',true);
+        const payload={name:form.name.value.trim(),distance_km:distance,race_date:form.date.value,goal_seconds:goal,priority:form.priority.value,race_type:form.race_type.value};
         try{await api(race?`api/v2/races/${race.id}`:'api/v2/races',{method:race?'PUT':'POST',body:payload});closeModal();toast(race?'Rennen aktualisiert.':'Rennen hinzugefügt.');refreshSettingsView();}catch(err){toast(err.message,true)}
       });
     });

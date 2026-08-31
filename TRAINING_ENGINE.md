@@ -8,7 +8,7 @@ v0.2 erweitert die bisherige robuste v0.1.7–v0.1.9-Logik um eine physiologisch
 
 ## Trainingsphasen
 
-Die Engine unterscheidet `foundation`, `build`, `specific`, `recovery`, `taper` und `race`. Die Position entsteht rennrelativ; Recovery hängt vom Trainingsblock ab und nicht von der ISO-Kalenderwoche. Der letzte Abschnitt vor dem A-Marathon enthält einen zweiwöchigen Taper und anschließend die Rennwoche. Ein B-Rennen erzeugt keinen eigenen Taper und ersetzt nur den Longrun seiner Rennwoche.
+Die Engine unterscheidet `foundation`, `build`, `specific`, `recovery`, `taper` und `race`. Die Position entsteht rennrelativ; Recovery hängt vom Trainingsblock ab und nicht von der ISO-Kalenderwoche. Bei mehreren A-Rennen steuert bis zum jeweiligen Renndatum immer das chronologisch nächste A-Rennen. Ein späteres A-Rennen verändert keine davorliegenden Wochen. Nach einem A-Rennen wird bei engem Abstand zum nächsten A-Ziel zunächst Recovery und anschließend eine kurze Übergangs-/Taperphase eingeplant. Ein B-Rennen erzeugt keinen eigenen Taper und ersetzt nur den Longrun seiner Rennwoche. Ein C-Rennen ersetzt nur eine Qualitätseinheit (ersatzweise Easy) und lässt Longrun sowie A-Periodisierung bestehen.
 
 `Foundation` priorisiert lockeres Volumen, Belastbarkeit, Hügel/Ökonomie und moderate Schwellenarbeit. `Build` erhöht Longrun-/Wochenbelastung kontrolliert und enthält gelegentlich VO₂max. `Specific` verschiebt den Schwerpunkt in Richtung Marathonpace, längere Schwellenarbeit und Ermüdungsresistenz; VO₂max tritt zurück. `Taper` reduziert das Volumen deutlich, erhält aber kurze kontrollierte Intensitätsreize und möglichst die Trainingsfrequenz. Die eingegebene Wettkampfdistanz ist in der Rennwoche unveränderlich; ein Marathon wird nicht auf ein Taper-Kilometerziel heruntergerechnet.
 
@@ -119,7 +119,7 @@ Die exakte Rotation „Intervalle → Pyramide → Tempodauerlauf“ ist nicht a
 
 Die CI führt neben Compile- und JavaScript-Syntaxchecks die vollständige Pytest-Regression, einen eigenständigen 16-Wochen-Marathonsimulator, **neun reproduzierbar randomisierte Läuferprofile**, Docker-Build und Docker-Runtime-Smoke-Test aus. Der feste Simulator erzeugt einen kompletten 16-Wochen-Zyklus, markiert jede Woche synthetisch als absolviert und lässt die nächste Woche aus der entstandenen Historie neu planen.
 
-Die neun Randomprofile verwenden feste Seeds und decken ungefähr **25–100 km etablierte Wochenlast**, **3–7 Lauftage**, **1–3 Qualitätseinheiten**, unterschiedliche 10-km-Leistungsstände, automatische/manuelle Wochenlimits, bewusst niedrige Nutzerlimits, unterschiedliche Longrun-Grenzen, ambitionierte Zielzeiten, Detraining und B-Rennen ab. Geprüft werden unter anderem:
+Die neun Randomprofile verwenden feste Seeds und decken ungefähr **25–100 km etablierte Wochenlast**, **3–7 Lauftage**, **1–3 Qualitätseinheiten**, unterschiedliche 10-km-Leistungsstände, automatische/manuelle Wochenlimits, bewusst niedrige Nutzerlimits, unterschiedliche Longrun-Grenzen, ambitionierte Zielzeiten, Detraining sowie A-/B-/C-Rennkonstellationen ab. Geprüft werden unter anderem:
 
 - Foundation/Build/Recovery/Specific/Taper/Race
 - exakte Anzahl und konfliktfreie Datierung der Einheiten

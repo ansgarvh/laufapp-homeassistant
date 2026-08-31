@@ -105,11 +105,12 @@ def apply_runtime_refinements(orchestration) -> None:
         dates = list(dates)
         equivalent = dict(equivalent)
 
-        # A-race: use the entered event date (not merely the configured Long-Run
-        # weekday) and keep its exact distance. If another planned slot occupies
-        # the race date, move that slot to the race session's original date.
+        # A-race of any supported distance: use the entered event date (not merely
+        # the configured Long-Run weekday) and keep its exact distance. If another
+        # planned slot occupies the race date, move that slot to the race session's
+        # original date.
         for idx, session in enumerate(sessions):
-            if session.variant_key == "race_marathon":
+            if session.workout_type == "race" and session.variant_key in {"race_marathon", "race_target"}:
                 race_day = date.fromisoformat(race["race_date"])
                 original_date = dates[idx]
                 collision = next((i for i, d in enumerate(dates) if i != idx and d == race_day), None)

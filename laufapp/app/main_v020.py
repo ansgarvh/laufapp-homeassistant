@@ -62,9 +62,9 @@ legacy.APP_VERSION=APP_VERSION;legacy.app.version=APP_VERSION;app=legacy.app
 
 
 class RaceCreate(BaseModel):
-    name:str=Field(min_length=1,max_length=120);distance_km:float=Field(gt=1,le=100);race_date:date;goal_seconds:int=Field(gt=300,le=24*3600);priority:Literal["A","B"]="A"
+    name:str=Field(min_length=1,max_length=120);distance_km:float=Field(gt=1,le=100);race_date:date;goal_seconds:int=Field(gt=300,le=24*3600);priority:Literal["A","B","C"]="A";race_type:Literal["5k","10k","half_marathon","marathon"]|None=None
 class RaceUpdate(BaseModel):
-    name:str=Field(min_length=1,max_length=120);distance_km:float=Field(gt=1,le=100);race_date:date;goal_seconds:int=Field(gt=300,le=24*3600);priority:Literal["A","B"]
+    name:str=Field(min_length=1,max_length=120);distance_km:float=Field(gt=1,le=100);race_date:date;goal_seconds:int=Field(gt=300,le=24*3600);priority:Literal["A","B","C"];race_type:Literal["5k","10k","half_marathon","marathon"]|None=None
 class RunShoePayload(BaseModel):shoe_id:int|None=None
 class WorkoutFeedbackPayload(BaseModel):
     rpe:int=Field(ge=1,le=10)
@@ -74,9 +74,22 @@ class WorkoutFeedbackPayload(BaseModel):
 
 
 def _priority_map(c):
-    raw=get_setting(c,"race_priorities",{}) or {};return {str(k):("B" if str(v).upper()=="B" else "A") for k,v in dict(raw).items()}
+    raw=get_setting(c,"race_priorities",{}) or {};out={}
+    for k,v in dict(raw).items():
+        priority=str(v).upper();out[str(k)]=priority if priority in {"A","B","C"} else "A"
+    return out
 def _set_priority(c,rid,priority):mapping=_priority_map(c);mapping[str(int(rid))]=priority;set_setting(c,"race_priorities",mapping)
 def _remove_priority(c,rid):mapping=_priority_map(c);mapping.pop(str(int(rid)),None);set_setting(c,"race_priorities",mapping)
+def _race_type_map(c):return {str(k):str(v) for k,v in dict(get_setting(c,"race_types",{}) or {}).items()}
+def _derived_race_type(distance):
+    d=float(distance)
+    if abs(d-5.0)<.25:return "5k"
+    if abs(d-10.0)<.35:return "10k"
+    if abs(d-21.0975)<.6:return "half_marathon"
+    return "marathon"
+def _race_type(c,rid,distance):return _race_type_map(c).get(str(int(rid)),_derived_race_type(distance))
+def _set_race_type(c,rid,race_type,distance):mapping=_race_type_map(c);mapping[str(int(rid))]=race_type or _derived_race_type(distance);set_setting(c,"race_types",mapping)
+def _remove_race_type(c,rid):mapping=_race_type_map(c);mapping.pop(str(int(rid)),None);set_setting(c,"race_types",mapping)
 def _race_week(d):start=legacy.week_start_for(d);return start,start+timedelta(days=6)
 
 def _validate_race_week(c,race_date,exclude_id=None):
@@ -90,7 +103,7 @@ def _refresh_b_week(c,race_date):
     if ws+timedelta(days=6)>=date.today():training.generate_week(c,ws,True)
 
 def _race_dict(c,r):
-    d=dict(r);d["priority"]=training.race_priority(c,int(r["id"]));p=legacy.predict_distance(c,float(r["distance_km"]));d["recommendation"]={"predicted_seconds":p["predicted_seconds"],"predicted_time":p["predicted_time"],"range_text":p["range_text"],"confidence":p["confidence"]} if p else None;focus=training.current_race(c);d["is_focus"]=bool(focus and int(focus["id"])==int(r["id"]));return d
+    d=dict(r);d["priority"]=training.race_priority(c,int(r["id"]));d["race_type"]=_race_type(c,int(r["id"]),float(r["distance_km"]));p=legacy.predict_distance(c,float(r["distance_km"]));d["recommendation"]={"predicted_seconds":p["predicted_seconds"],"predicted_time":p["predicted_time"],"range_text":p["range_text"],"confidence":p["confidence"]} if p else None;focus=training.current_race(c);d["is_focus"]=bool(focus and int(focus["id"])==int(r["id"]));return d
 
 
 @app.get("/api/v2/races")
@@ -105,7 +118,7 @@ def api_v2_race_recommendation(distance_km:float=Query(gt=1,le=100)):
 def api_v2_race_add(p:RaceCreate):
     if p.race_date<=date.today():raise HTTPException(400,"Das Wettkampfdatum muss in der Zukunft liegen.")
     with db_conn() as c:
-        _validate_race_week(c,p.race_date);cur=c.execute("INSERT INTO races(name,distance_km,race_date,goal_seconds,target_source,active) VALUES(?,?,?,?, 'user',1)",(p.name,p.distance_km,p.race_date.isoformat(),p.goal_seconds));rid=int(cur.lastrowid);_set_priority(c,rid,p.priority)
+        _validate_race_week(c,p.race_date);cur=c.execute("INSERT INTO races(name,distance_km,race_date,goal_seconds,target_source,active) VALUES(?,?,?,?, 'user',1)",(p.name,p.distance_km,p.race_date.isoformat(),p.goal_seconds));rid=int(cur.lastrowid);_set_priority(c,rid,p.priority);_set_race_type(c,rid,p.race_type,p.distance_km)
         if p.priority=="A":legacy.mark_plan_stale(c,"A-Wettkampfplanung geändert")
         else:_refresh_b_week(c,p.race_date)
         return _race_dict(c,c.execute("SELECT * FROM races WHERE id=?",(rid,)).fetchone())
@@ -115,21 +128,21 @@ def api_v2_race_update(rid:int,p:RaceUpdate):
     with db_conn() as c:
         old=c.execute("SELECT * FROM races WHERE id=?",(rid,)).fetchone()
         if not old:raise HTTPException(404,"Wettkampf nicht gefunden.")
-        old_priority=training.race_priority(c,rid);old_date=date.fromisoformat(old["race_date"]);_validate_race_week(c,p.race_date,rid);c.execute("UPDATE races SET name=?,distance_km=?,race_date=?,goal_seconds=?,target_source='user',active=1 WHERE id=?",(p.name,p.distance_km,p.race_date.isoformat(),p.goal_seconds,rid));_set_priority(c,rid,p.priority)
-        if old_priority=="B" and p.priority=="B":
+        old_priority=training.race_priority(c,rid);old_date=date.fromisoformat(old["race_date"]);_validate_race_week(c,p.race_date,rid);c.execute("UPDATE races SET name=?,distance_km=?,race_date=?,goal_seconds=?,target_source='user',active=1 WHERE id=?",(p.name,p.distance_km,p.race_date.isoformat(),p.goal_seconds,rid));_set_priority(c,rid,p.priority);_set_race_type(c,rid,p.race_type,p.distance_km)
+        if old_priority in {"B","C"} and p.priority in {"B","C"}:
             if old_date!=p.race_date:_refresh_b_week(c,old_date)
             _refresh_b_week(c,p.race_date)
         else:
-            if old_priority=="B":_refresh_b_week(c,old_date)
+            if old_priority in {"B","C"}:_refresh_b_week(c,old_date)
             legacy.mark_plan_stale(c,"A-Wettkampfplanung geändert")
-            if p.priority=="B":_refresh_b_week(c,p.race_date)
+            if p.priority in {"B","C"}:_refresh_b_week(c,p.race_date)
         return _race_dict(c,c.execute("SELECT * FROM races WHERE id=?",(rid,)).fetchone())
 @app.delete("/api/v2/races/{rid}")
 def api_v2_race_delete(rid:int):
     with db_conn() as c:
         r=c.execute("SELECT * FROM races WHERE id=?",(rid,)).fetchone()
         if not r:raise HTTPException(404,"Wettkampf nicht gefunden.")
-        priority=training.race_priority(c,rid);race_date=date.fromisoformat(r["race_date"]);c.execute("DELETE FROM races WHERE id=?",(rid,));_remove_priority(c,rid)
+        priority=training.race_priority(c,rid);race_date=date.fromisoformat(r["race_date"]);c.execute("DELETE FROM races WHERE id=?",(rid,));_remove_priority(c,rid);_remove_race_type(c,rid)
         if priority=="A":legacy.mark_plan_stale(c,"A-Wettkampfplanung geändert")
         else:_refresh_b_week(c,race_date)
         return {"ok":True}
