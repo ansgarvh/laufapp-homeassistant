@@ -1,0 +1,39 @@
+name: Apply v0.2.17 performance profile
+on:
+  push:
+    branches: [v0.2.17-performance-profile]
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: v0.2.17-performance-profile
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+      - name: Apply exactly tested patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .github/v0217_patch_00 .github/v0217_patch_01 .github/v0217_patch_02 .github/v0217_patch_03 | base64 -d > /tmp/v0217.patch.gz
+          echo 'e66e96369c9bbf30b7502453d6785d9e891347295199490c91462e240559433f  /tmp/v0217.patch.gz' | sha256sum -c -
+          gzip -dc /tmp/v0217.patch.gz > /tmp/v0217.patch
+          echo '2b649f83537d2fa4ddd8d4820e73ce36f1fdfbc6a18f1e2698bd177a152b8aab  /tmp/v0217.patch' | sha256sum -c -
+          git apply -p2 --check /tmp/v0217.patch
+          git apply -p2 /tmp/v0217.patch
+          rm .github/v0217_patch_00 .github/v0217_patch_01 .github/v0217_patch_02 .github/v0217_patch_03 .github/workflows/apply-v0217.yml
+          python -m compileall -q laufapp/app custom_components/laufapp_hae_relay
+          node --check laufapp/app/static/app.js
+          node --check laufapp/app/static/sw.js
+          bash -n laufapp/run.sh
+          python -m pip install -q -r laufapp/requirements.txt pytest httpx pyyaml
+          pytest -q tests/test_v0217_performance_profile.py tests/test_release_static.py
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'v0.2.17: transparent performance profile'
+          git push origin HEAD:v0.2.17-performance-profile
