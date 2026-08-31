@@ -1,4 +1,4 @@
-name: Temporary v0.2.15 apply verified payload
+name: Temporary v0.2.15 payload apply
 
 on:
   push:
@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   apply:
-    if: github.event.head_commit.message == 'chore: apply verified v0.2.15 payload'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout branch
