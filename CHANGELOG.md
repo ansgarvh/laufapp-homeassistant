@@ -1,5 +1,15 @@
 # Laufapp Changelog
 
+## v0.2.25 – 2026-09-01
+
+- Neue vollständige **Laufdetails**-Ansicht für erkannte absolvierte Läufe aus Fortschritt und Wochenübersicht, ohne die bestehende Bearbeitungs-/KI-Feedback-Funktion zu entfernen.
+- Zeigt – soweit in den gespeicherten Apple-Health-/Health-Auto-Export-Daten vorhanden – Strecke, Trainings-/verstrichene Zeit, Pace, Höhenmeter, Herzfrequenz, Leistung, Kadenz, Aktivitätskalorien, RPE/Anstrengung, Schrittlänge, vertikale Oszillation und Bodenkontaktzeit.
+- Zeitaufgelöste lokale Kurven für Höhe, Herzfrequenz, Pace, Leistung, Kadenz und Laufdynamik ergänzt. Browserantworten werden auf höchstens 240 Punkte je Messreihe und 700 GPS-Punkte begrenzt; die persistenten Rohdaten bleiben unverändert.
+- GPS-Strecke wird lokal als SVG mit Start-/Endmarker gezeichnet. Es wird kein externer Karten-/Tile-Dienst eingebunden, dadurch verlassen GPS-Rohkoordinaten die Laufapp für die Darstellung nicht und die bestehende CSP bleibt unverändert.
+- Gesamtkalorien werden bewusst nicht aus Aktivitätskalorien geschätzt, weil die bisher persistierten Quellen keinen separaten Gesamtenergie-Wert je Workout vorhalten. Die UI kennzeichnet den fehlenden Wert transparent.
+- Additiver v0.2.25-Entry-Point und eigene Frontend-Schicht; keine Datenbankschemamigration, keine Änderung an Trainingsengine, HAE-/Nabu-/Ingress-Security oder am separat versionierten Home-Assistant-Relay.
+- Neue Regressionen prüfen Einheitenumrechnung, Downsampling, GPS-Route/Höhenprofil, fehlende Gesamtkalorien, 404-Verhalten und die runtime-seitige Auslieferung der v0.2.25-Assets.
+
 ## v0.2.24 – 2026-09-01
 
 - Unter **Mehr** einen echten Menüpunkt **KI & Datenschutz** ergänzt; die bisherige reine Statuskarte bleibt als kompakte Übersicht erhalten.
