@@ -1,4 +1,18 @@
-from scripts.check_relay_versioning import RELAY_SOURCE, validate_transition
+from __future__ import annotations
+
+import importlib.util
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+GUARD = ROOT / "scripts/check_relay_versioning.py"
+
+spec = importlib.util.spec_from_file_location("laufapp_relay_version_guard", GUARD)
+assert spec is not None and spec.loader is not None
+relay_version_guard = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(relay_version_guard)
+
+RELAY_SOURCE = relay_version_guard.RELAY_SOURCE
+validate_transition = relay_version_guard.validate_transition
 
 
 def test_normal_laufapp_release_does_not_require_relay_bump():
