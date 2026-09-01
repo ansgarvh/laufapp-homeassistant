@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Laufapp">
+  <rect width="512" height="512" rx="92" fill="#000"/>
+  <g stroke="#b9ff16" stroke-width="34" stroke-linecap="round" fill="none">
+    <path d="M112 183h70"/>
+    <path d="M95 251h72"/>
+    <path d="M82 319h72"/>
+  </g>
+  <circle cx="330" cy="135" r="38" fill="#b9ff16"/>
+  <g stroke="#b9ff16" stroke-width="48" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M285 208l-44 65"/>
+    <path d="M286 208h46l48 57h57"/>
+    <path d="M299 233l-32 92 72 45-8 91"/>
+    <path d="M275 322l-31 73-78 21"/>
+  </g>
+</svg>
