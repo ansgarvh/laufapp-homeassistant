@@ -1,5 +1,13 @@
 # Laufapp Changelog
 
+## v0.2.21 – 2026-09-01
+
+- Das freigegebene schwarze/neon-grüne Laufmotiv wird im sichtbaren Header jetzt direkt als PNG-Data-URI eingebettet; der Header benötigt keinen separaten Bildrequest mehr.
+- Behebt die reale Home-Assistant-/iOS-Ingress-Darstellung, bei der v0.2.20 statt des Lauf-Icons ein Broken-Image-Symbol mit Fragezeichen zeigte.
+- PWA-Manifest, Apple-Touch-Referenz und Service-Worker-Cache auf v0.2.21 cache-busted.
+- Neue Regression dekodiert das eingebettete PNG vollständig, prüft die feste SHA-256-Prüfsumme des freigegebenen Motivs und validiert die externen PWA-PNGs über Chunk-CRC und IDAT-Dekompression.
+- Keine Datenbankschemamigration und keine Änderung an Trainingsengine, Health Auto Export, Nabu-Casa-/Ingress-Security oder dem unabhängig versionierten Home-Assistant-Relay.
+
 ## v0.2.20 – 2026-09-01
 
 - Freigegebenes schwarzes/neon-grünes Lauf-Icon mit Läufer und drei Bewegungslinien ersetzt das bisherige per CSS gezeichnete Header-Symbol.
