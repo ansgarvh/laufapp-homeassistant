@@ -11,16 +11,16 @@ def _png_size(path):
 
 def test_versions_and_assets():
     cfg=yaml.safe_load((ROOT/'laufapp/config.yaml').read_text())
-    assert cfg['version']=='0.2.24'
-    assert 'APP_VERSION = "0.2.24"' in (ROOT/'laufapp/app/main_v0224.py').read_text()
-    assert 'ARG BUILD_VERSION=0.2.24' in (ROOT/'laufapp/Dockerfile').read_text()
-    assert 'main_v0224:app' in (ROOT/'laufapp/run.sh').read_text()
-    assert '# Laufapp v0.2.24' in (ROOT/'README.md').read_text()
-    assert '## v0.2.24 – 2026-09-01' in (ROOT/'CHANGELOG.md').read_text()
-    assert (ROOT/'RELEASE_NOTES_v0.2.24.md').exists()
-    assert 'Laufapp v0.2.24' in (ROOT/'RELEASE_NOTES_v0.2.24.md').read_text()
+    assert cfg['version']=='0.2.25'
+    assert 'APP_VERSION = "0.2.25"' in (ROOT/'laufapp/app/main_v0225.py').read_text()
+    assert 'ARG BUILD_VERSION=0.2.25' in (ROOT/'laufapp/Dockerfile').read_text()
+    assert 'main_v0225:app' in (ROOT/'laufapp/run.sh').read_text()
+    assert '# Laufapp v0.2.25' in (ROOT/'README.md').read_text()
+    assert '## v0.2.25 – 2026-09-01' in (ROOT/'CHANGELOG.md').read_text()
+    assert (ROOT/'RELEASE_NOTES_v0.2.25.md').exists()
+    assert 'Laufapp v0.2.25' in (ROOT/'RELEASE_NOTES_v0.2.25.md').read_text()
     static=ROOT/'laufapp/app/static'
-    for name in ['index.html','styles.css','bugfix.css','app.js','manifest.webmanifest','sw.js','icon.svg','icon-192.png','apple-touch-icon.png','assets/bugfix.css','assets/v020.js','assets/v020.css','assets/v020_science.js','assets/v020_science.css','assets/v023_aggressiveness.js','assets/v025.js','assets/v025.css','assets/v0213.js','assets/v0213.css','assets/v0214.js','assets/v0214.css','assets/v0215.css','assets/v0217.css','assets/v0220.css','assets/v0222.css','assets/v0223.css','assets/v0224.css']:assert (static/name).exists()
+    for name in ['index.html','styles.css','bugfix.css','app.js','manifest.webmanifest','sw.js','icon.svg','icon-192.png','apple-touch-icon.png','assets/bugfix.css','assets/v020.js','assets/v020.css','assets/v020_science.js','assets/v020_science.css','assets/v023_aggressiveness.js','assets/v025.js','assets/v025.css','assets/v0213.js','assets/v0213.css','assets/v0214.js','assets/v0214.css','assets/v0215.css','assets/v0217.css','assets/v0220.css','assets/v0222.css','assets/v0223.css','assets/v0224.css','assets/v0225.js','assets/v0225.css']:assert (static/name).exists()
     assert not (static/'icon-512.png').exists()
     m=json.loads((static/'manifest.webmanifest').read_text());assert m['display']=='standalone'
     assert m['icons'][0]['src']=='icon.svg?v=0.2.21'
@@ -35,11 +35,12 @@ def test_versions_and_assets():
         assert _png_size(path)==dims
         assert hashlib.sha256(path.read_bytes()).hexdigest()==digest
     sw=(static/'sw.js').read_text()
-    assert "const CACHE='laufapp-v0.2.24'" in sw
+    assert "const CACHE='laufapp-v0.2.25'" in sw
     assert 'icon.svg?v=0.2.21' in sw and 'icon-192.png?v=0.2.21' in sw and 'apple-touch-icon.png?v=0.2.21' in sw
     assert 'icon-512.png' not in sw
     assert 'assets/v0220.css?v=0.2.20' in sw
     assert 'app.js?v=0.2.24' in sw and 'assets/v0222.css?v=0.2.22' in sw and 'assets/v0223.css?v=0.2.23' in sw and 'assets/v0224.css?v=0.2.24' in sw
+    assert 'assets/v0225.css?v=0.2.25' in sw and 'assets/v0225.js?v=0.2.25' in sw
     assert 'assets/v0213.js?v=0.2.13' in sw and 'assets/v0213.css?v=0.2.13' in sw and 'assets/v0215.css?v=0.2.15' in sw
     assert 'assets/v0214.js?v=0.2.14' not in sw and 'assets/v0214.css?v=0.2.14' not in sw
     index=(static/'index.html').read_text()
@@ -47,6 +48,9 @@ def test_versions_and_assets():
         assert asset in index
     assert '<span class="brand-mark"><img src="data:image/png;base64,' in index
     assert '<span class="brand-mark"><img src="icon-192.png' not in index
+    entry=(ROOT/'laufapp/app/main_v0225.py').read_text()
+    assert 'assets/v0225.css?v=0.2.25' in entry and 'assets/v0225.js?v=0.2.25' in entry
+    assert '_INDEX_V0225' in entry and 'HTMLResponse' in entry
     css0220=(static/'assets/v0220.css').read_text()
     assert '.brand-mark:before,.brand-mark i{display:none}' in css0220
     assert '.brand-mark img{' in css0220
@@ -56,6 +60,8 @@ def test_versions_and_assets():
     v025=(static/'assets/v025.js').read_text()
     css025=(static/'assets/v025.css').read_text()
     v0213=(static/'assets/v0213.js').read_text()
+    v0225=(static/'assets/v0225.js').read_text()
+    css0225=(static/'assets/v0225.css').read_text()
     assert all(x in races for x in ['A-Rennen','B-Rennen','C-Rennen','Wettkampfart','api/v2/races','inputmode="decimal"',"replace(',', '.')"] )
     planner=(ROOT/'laufapp/app/training_v020.py').read_text()
     main020=(ROOT/'laufapp/app/main_v020.py').read_text()
@@ -69,12 +75,18 @@ def test_versions_and_assets():
     assert 'Deine Bestzeiten' in v025 and 'improvement_since_best_seconds' in v025
     assert '--nav-safe-compact' in css025 and 'v025-best-card' in css025
     assert 'Trainingsentwicklung' in v0213 and 'api/progress/trends' in v0213
+    assert 'api/v2/runs/${Number(runId)}/detail-view' in v0225
+    assert '.run-row[data-run-edit]' in v0225 and '.week-workout.status-completed' in v0225
+    assert all(label in v0225 for label in ['Trainingszeit','Verstrichene Zeit','Aktivitätskalorien','Gesamtkalorien','Vertikale Oszillation','Bodenkontaktzeit','Schrittlänge','GPS-Strecke'])
+    assert 'openstreetmap' not in v0225.casefold() and 'tile.openstreetmap' not in v0225.casefold()
+    assert '.v0225-run-detail-overlay' in css0225
     subprocess.run(['node','--check',str(static/'app.js')],check=True)
     subprocess.run(['node','--check',str(static/'assets/v020.js')],check=True)
     subprocess.run(['node','--check',str(static/'assets/v020_science.js')],check=True)
     subprocess.run(['node','--check',str(static/'assets/v023_aggressiveness.js')],check=True)
     subprocess.run(['node','--check',str(static/'assets/v025.js')],check=True)
     subprocess.run(['node','--check',str(static/'assets/v0213.js')],check=True)
+    subprocess.run(['node','--check',str(static/'assets/v0225.js')],check=True)
 
 
 def test_ha_app_config_and_health_auto_export_gateway():
@@ -96,7 +108,7 @@ def test_ha_app_config_and_health_auto_export_gateway():
     gateway=(ROOT/'laufapp/app/health_auto_export_gateway.py').read_text()
     assert '@app.post("/health-auto-export")' in gateway
     assert '@app.post("/home-assistant-relay")' in gateway
-    assert 'from main_v0224 import APP_VERSION' in gateway
+    assert 'from main_v0225 import APP_VERSION' in gateway
     assert 'LAUFAPP_HAE_RELAY_OK transport=nabu_casa' in gateway
     assert 'openapi_url=None' in gateway and 'Cache-Control' in gateway
     hae=(ROOT/'laufapp/app/health_auto_export_v027.py').read_text()
@@ -132,6 +144,8 @@ def test_ha_app_config_and_health_auto_export_gateway():
     assert (ROOT/'laufapp/app/main_v0222.py').exists()
     assert (ROOT/'laufapp/app/main_v0223.py').exists()
     assert (ROOT/'laufapp/app/main_v0224.py').exists()
+    assert (ROOT/'laufapp/app/main_v0225.py').exists()
+    assert (ROOT/'laufapp/app/run_detail_v0225.py').exists()
     assert (ROOT/'laufapp/app/coach_v0223.py').exists()
     assert (ROOT/'laufapp/app/training_calendar_guardrails_v0222.py').exists()
     assert (ROOT/'laufapp/app/data_sync_v0222.py').exists()
@@ -198,7 +212,7 @@ def test_github_repository_layout_and_security_audit():
     assert repo['name']=='Laufapp Home Assistant Repository'
     assert repo['url']=='https://github.com/ansgarvh/laufapp-homeassistant'
     workflow=(ROOT/'.github/workflows/ci.yml').read_text()
-    for required in ['pytest -q','python -m compileall','custom_components/laufapp_hae_relay','node --check','docker build','v023_aggressiveness.js','v025.js','health-auto-export','home-assistant-relay','pip-audit','X-Forwarded-For','172.30.32.0/23','X-Remote-User-Id']:
+    for required in ['pytest -q','python -m compileall','custom_components/laufapp_hae_relay','node --check','docker build','v023_aggressiveness.js','v025.js','v0225.js','health-auto-export','home-assistant-relay','pip-audit','X-Forwarded-For','172.30.32.0/23','X-Remote-User-Id']:
         assert required in workflow
     security=(ROOT/'.github/workflows/security.yml').read_text()
     assert 'custom_components/laufapp_hae_relay' in security
