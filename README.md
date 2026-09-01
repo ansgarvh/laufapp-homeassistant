@@ -1,6 +1,19 @@
-# Laufapp v0.2.22
+# Laufapp v0.2.23
 
 Private, mobile-first Lauf-PWA für Home Assistant OS. Laufapp verbindet eine lokale Trainings-/Prognoseengine mit Apple-Health-Daten, Health Auto Export und einem optionalen OpenAI-Coach. Die Anwendung ist für einen einzelnen privaten Nutzer ausgelegt.
+
+
+## Neu in v0.2.23 – KI-Chat und Feedback zu einem einzelnen Lauf
+
+- Der **Coach-Chat** nutzt die letzten lokalen Nachrichten als begrenzten Gesprächskontext und liefert schemafeste Antworten über die OpenAI Responses API.
+- Jeder Lauf unter **Fortschritt → Laufdetails** kann ausdrücklich über **Mit KI analysieren** ausgewertet werden. Die Antwort gliedert sich in Soll–Ist, Pace/Verlauf, Herzfrequenz, Laufdynamik, Recovery, nächsten Schritt und Datenqualität.
+- Für die Einzelanalyse werden lokal berechnete Kennwerte dieses Laufs, die verknüpfte Planeinheit, kompakte Vergleichsläufe, Wochenlast und relevante Recovery-Aggregate übertragen. **GPS-Rohkoordinaten und die vollständige Health-Datenbank werden nicht gesendet.**
+- Eine Analyse wird in der bestehenden persistenten SQLite-Datenbank gespeichert und ohne erneuten API-Aufruf wieder angezeigt. Nach geänderten Laufdaten wird sie als veraltet markiert; nur **Erneut analysieren** startet bewusst eine neue Anfrage.
+- OpenAI-Antwortspeicherung ist mit `store=false` deaktiviert. Die üblichen API-Abuse-Monitoring-Regeln des gewählten OpenAI-Projekts bleiben davon unberührt.
+- KI-Antworten verwenden Structured Outputs. Laufnotizen und andere eingebettete Texte werden ausdrücklich als unvertraute Daten behandelt.
+- Der API-Key bleibt ausschließlich in der Home-Assistant-App-Konfiguration. Das Standardbudget bleibt bei 10 EUR/Monat; `gpt-5.6-terra` ist der Coach und `gpt-5.6-luna` liest ausdrücklich hochgeladene Screenshots.
+- Planänderungen werden weiterhin nur als serverseitig validierter Vorschlag gespeichert und erst über **Übernehmen** wirksam. Die lokale Trainingsengine bleibt autoritativ.
+- Keine Datenbankschemamigration und keine Änderung am separat versionierten Home-Assistant-Relay.
 
 
 ## Neu in v0.2.22 – Kalenderabstände und letzter Datenabgleich
@@ -157,15 +170,15 @@ Ausführliche Details und verbleibende Risiken stehen in `SECURITY.md` und `NABU
 
 ## Persistenz
 
-Benutzerdaten liegen im persistenten Home-Assistant-`/data`-Bereich. v0.2.22 benötigt **keine Datenbankschemamigration**.
+Benutzerdaten liegen im persistenten Home-Assistant-`/data`-Bereich. v0.2.23 benötigt **keine Datenbankschemamigration**.
 
 ## OpenAI
 
-Der OpenAI-API-Key bleibt serverseitig in der Home-Assistant-App-Konfiguration und wird nicht an das Browser-Frontend ausgeliefert. Laufapp funktioniert für Plan, Prognosen, Health-Import, Wochenübersicht, Läufe, Schuhe und Rennen ohne OpenAI-Key.
+Der OpenAI-API-Key bleibt serverseitig in der Home-Assistant-App-Konfiguration und wird nicht an das Browser-Frontend ausgeliefert. API-Antwortspeicherung ist mit `store=false` abgeschaltet. Standardmäßige Abuse-Monitoring-Logs können abhängig von den Datenkontrollen des OpenAI-Projekts dennoch zeitlich begrenzt verarbeitet werden. Laufapp funktioniert für Plan, Prognosen, Health-Import, Wochenübersicht, Läufe, Schuhe und Rennen vollständig ohne OpenAI-Key.
 
 ## Release-Prüfungen
 
-Vor Merge laufen Python-Compilecheck einschließlich Custom Integration, JavaScript-Syntaxchecks, vollständige Pytest-Regression über den v0.2.22-Entry-Point, Kalender-/Synchronisationsregressionen, realitätsnahe HAE-v2-Regressionstests, >262144-Zeichen-Relaytest, Rate-/Slow-Body-Webhooktests, PNG-Decode-/Inline-Brand-Regression, 16-Wochen-Marathonsimulation, neun randomisierte Läuferprofile, `pip check`, `pip-audit`, Git-History-Secret-Scan, Bandit-Gate, Docker-Build, direkter HAE-E2E, interner Relay-E2E, externe Ingress-Spoofing-Negativtests und positive Home-Assistant-Ingress-Netzsimulation.
+Vor Merge laufen Python-Compilecheck einschließlich Custom Integration, JavaScript-Syntaxchecks, vollständige Pytest-Regression über den v0.2.23-Entry-Point, gemockte KI-/Structured-Output-/Datensparsamkeitsprüfungen, Kalender-/Synchronisationsregressionen, realitätsnahe HAE-v2-Regressionstests, >262144-Zeichen-Relaytest, Rate-/Slow-Body-Webhooktests, PNG-Decode-/Inline-Brand-Regression, 16-Wochen-Marathonsimulation, neun randomisierte Läuferprofile, `pip check`, `pip-audit`, Git-History-Secret-Scan, Bandit-Gate, Docker-Build, direkter HAE-E2E, interner Relay-E2E, externe Ingress-Spoofing-Negativtests und positive Home-Assistant-Ingress-Netzsimulation.
 
 Statisch/isoliert und in Linux/Docker getestet. Die echte Home-Assistant-OS-/Custom-Integration-/Nabu-Casa-Remote-UI-/Health-Auto-Export-iPhone-Integration muss nach Installation auf dem Zielsystem lokal verifiziert werden.
 
@@ -177,7 +190,7 @@ export LAUFAPP_DATA_DIR=/tmp/laufapp-data
 export LAUFAPP_TRANSFER_DIR=/tmp/laufapp-transfer
 export LAUFAPP_TRUSTED_INGRESS_ONLY=0
 export LAUFAPP_HEALTH_AUTO_EXPORT_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
-uvicorn main_v0222:app --host 127.0.0.1 --port 8099 --no-proxy-headers
+uvicorn main_v0223:app --host 127.0.0.1 --port 8099 --no-proxy-headers
 ```
 
-Weitere Details: `SECURITY.md`, `NABU_CASA_HEALTH_SYNC.md`, `RELEASE_NOTES_v0.2.22.md`, `TRAINING_ENGINE.md`, `MIGRATIONS.md`.
+Weitere Details: `SECURITY.md`, `NABU_CASA_HEALTH_SYNC.md`, `RELEASE_NOTES_v0.2.23.md`, `TRAINING_ENGINE.md`, `MIGRATIONS.md`.
