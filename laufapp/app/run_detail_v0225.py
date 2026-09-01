@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import math
 import statistics
-from typing import Any, Iterable
+from typing import Any
 
 from training import parse_dt
 
@@ -59,6 +59,12 @@ def _normalize_sample(metric: str, value: float, unit: str) -> tuple[float, str]
         return (value, "W") if 0 <= value <= 3000 else None
     if metric == "cadence":
         return (value, "spm") if 20 <= value <= 300 else None
+    if metric == "total_calories":
+        if u in {"kj", "kilojoule", "kilojoules"}:
+            value /= 4.184
+        elif u not in {"", "kcal", "kilocalorie", "kilocalories"}:
+            return None
+        return (value, "kcal") if 0 <= value <= 10000 else None
     if metric == "stride_length":
         if u in {"cm", "centimeter", "centimeters"}:
             value /= 100.0
@@ -263,6 +269,7 @@ def build_run_detail(c, run_id: int) -> dict[str, Any]:
         "stride_length",
         "vertical_oscillation",
         "ground_contact_time",
+        "total_calories",
     ):
         item = _sample_series(c, run_id, metric, started_at)
         if item:
@@ -280,6 +287,7 @@ def build_run_detail(c, run_id: int) -> dict[str, Any]:
         hr = float(series["heart_rate"]["average"])
     elevation_gain = _finite(run["elevation_m"])
     calories = _finite(run["calories"])
+    total_calories = float(series["total_calories"]["average"]) if series.get("total_calories") else None
     rpe = int(run["rpe"]) if run["rpe"] is not None else None
 
     def average(metric: str) -> float | None:
@@ -296,9 +304,7 @@ def build_run_detail(c, run_id: int) -> dict[str, Any]:
         "average_power_w": round(average("running_power"), 1) if average("running_power") is not None else None,
         "average_cadence_spm": round(average("cadence"), 1) if average("cadence") is not None else None,
         "active_calories_kcal": round(calories, 1) if calories is not None else None,
-        # Current persistent sources do not retain resting-energy calories as a
-        # separate workout field. Do not manufacture Apple's "total calories".
-        "total_calories_kcal": None,
+        "total_calories_kcal": round(total_calories, 1) if total_calories is not None else None,
         "effort_rpe": rpe,
         "effort_label": _effort_label(rpe),
         "stride_length_m": round(average("stride_length"), 3) if average("stride_length") is not None else None,
@@ -306,6 +312,11 @@ def build_run_detail(c, run_id: int) -> dict[str, Any]:
         "ground_contact_time_ms": round(average("ground_contact_time"), 1) if average("ground_contact_time") is not None else None,
     }
 
+    total_note = (
+        "Gesamtkalorien wurden separat aus Health Auto Export übernommen."
+        if total_calories is not None
+        else "Für diesen Lauf ist kein separat gespeicherter Gesamtenergie-Wert vorhanden; die App schätzt ihn deshalb nicht aus den Aktivitätskalorien."
+    )
     return {
         "schema": 1,
         "run": run_dict,
@@ -314,7 +325,7 @@ def build_run_detail(c, run_id: int) -> dict[str, Any]:
         "series": series,
         "route": route,
         "notes": {
-            "total_calories": "Gesamtkalorien werden von den derzeit gespeicherten Apple-Health-/HAE-Quellen nicht getrennt von Aktivitätskalorien vorgehalten; deshalb zeigt die App dafür keinen geschätzten Wert.",
+            "total_calories": total_note,
             "map": route["privacy_note"],
         },
     }
