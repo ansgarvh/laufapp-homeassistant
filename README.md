@@ -1,6 +1,17 @@
-# Laufapp v0.2.24
+# Laufapp v0.2.25
 
 Private, mobile-first Lauf-PWA für Home Assistant OS. Laufapp verbindet eine lokale Trainings-/Prognoseengine mit Apple-Health-Daten, Health Auto Export und einem optionalen OpenAI-Coach. Die Anwendung ist für einen einzelnen privaten Nutzer ausgelegt.
+
+
+## Neu in v0.2.25 – vollständige Laufdetailansicht
+
+- Ein erkannter, absolvierter Lauf öffnet per Klick jetzt eine eigenständige **Laufdetails**-Ansicht – sowohl aus **Fortschritt** als auch direkt aus einer absolvierten Einheit der **Wochenübersicht**.
+- Die Ansicht bleibt im hellen Laufapp-Look&Feel und zeigt Strecke, Trainingszeit, verstrichene Zeit, Ø-Pace, Höhenmeter, Ø-Herzfrequenz, Ø-Leistung, Ø-Kadenz, Aktivitätskalorien, Anstrengung, Schrittlänge, vertikale Oszillation und Bodenkontaktzeit, soweit die jeweilige Quelle diese Werte gespeichert hat.
+- Zeitaufgelöste Kurven für Höhe, Herzfrequenz, Pace, Leistung, Kadenz, vertikale Oszillation, Bodenkontaktzeit und Schrittlänge werden aus den bereits lokal gespeicherten Messpunkten erzeugt. Große Zeitreihen werden für die Browserdarstellung begrenzt heruntergesampelt, ohne die persistierten Rohdaten zu verändern.
+- Vorhandene GPS-Punkte werden als lokale Streckengrafik mit Start-/Endmarkierung dargestellt. Dafür wird bewusst **kein externer Karten-/Tile-Dienst** aufgerufen; GPS-Rohkoordinaten verlassen die Laufapp nicht.
+- **Gesamtkalorien** werden nicht aus Aktivitätskalorien hochgerechnet: die bestehenden Apple-Health-/HAE-Pfade speichern bislang keinen separaten Gesamtenergie-Wert pro Lauf. Die Kachel bleibt deshalb transparent leer, statt einen erfundenen Wert zu zeigen.
+- Die vorhandenen Funktionen für eigene Laufangaben und **KI-Feedback zu diesem Lauf** bleiben erreichbar und unverändert erhalten.
+- Keine Datenbankschemamigration und keine Änderung am separat versionierten Home-Assistant-Relay.
 
 
 ## Neu in v0.2.24 – KI & Datenschutz bedienbar
@@ -87,7 +98,6 @@ Details zur Berechnung: `PERFORMANCE_PROFILE.md`.
 
 
 ## Neu in v0.2.16 – robuste Aktivitätszuordnung
-
 - Automatische Zuordnung nur, wenn die gelaufene Distanz mindestens 90 % der geplanten Distanz erreicht.
 - Übererfüllung bleibt erlaubt: z. B. 20 km tatsächlich bei 15 km geplant wird automatisch verknüpft.
 - Kürzere Läufe unter 90 % bleiben unverknüpft und können im Lauf-Menü explizit über **„Aktivität verknüpfen“** einer Planaktivität desselben Tages zugeordnet werden.
@@ -169,18 +179,18 @@ Ausführliche Details und verbleibende Risiken stehen in `SECURITY.md` und `NABU
 ## Bestehende Funktionen
 
 - Heute: Planfokus, Zielzeit, Prognose, nächste Einheit, Recovery-Signale und Coach-Vorschläge
-- Wochenübersicht: 3–7 konfigurierbare Lauftage, Verschieben/Tauschen, Status, Wochenkilometer und Planbegründungen
+- Wochenübersicht: 3–7 konfigurierbare Lauftage, Verschieben/Tauschen, Status, Wochenkilometer und Planbegründungen; absolvierte verknüpfte Läufe öffnen die Laufdetailansicht
 - Rennen: mehrere A-/B-/C-Rennen mit eigener Zielzeit, Wettkampfart und exakter Distanz
 - Trainingssteuerung: wissenschaftlich orientierte Periodisierung, Workout-Variation, Deload/Taper, Longrun-/Qualitätsbudget und Planungsaggressivität
-- Fortschritt: Prognosen für 5 km, 10 km, Halbmarathon und Marathon, Bestzeiten, Wochenkilometer und die neue 3–24-Monats-Trainingsentwicklung
+- Fortschritt: Prognosen für 5 km, 10 km, Halbmarathon und Marathon, Bestzeiten, Wochenkilometer, 3–24-Monats-Trainingsentwicklung und detaillierbare gespeicherte Läufe
 - Apple Health: manueller ZIP/XML-Import der letzten 24 Monate als Historien-/Fallbackpfad
-- detaillierte Laufdaten: HR, Speed, Power, Schrittlänge, vertikale Oszillation, Bodenkontaktzeit, Kadenz, GPS/Höhe soweit vorhanden
+- detaillierte Laufdaten: HR, Speed/Pace, Power, Schrittlänge, vertikale Oszillation, Bodenkontaktzeit, Kadenz, GPS/Höhe soweit vorhanden; lokale Verlaufskurven und GPS-Streckengrafik
 - Schuhe: Stammdaten und Kilometerbilanz
 - AI Coach: optionaler Chat, Screenshot-Auswertung und ausschließlich bestätigungspflichtige Planänderungen
 
 ## Persistenz
 
-Benutzerdaten liegen im persistenten Home-Assistant-`/data`-Bereich. v0.2.24 benötigt **keine Datenbankschemamigration**.
+Benutzerdaten liegen im persistenten Home-Assistant-`/data`-Bereich. v0.2.25 benötigt **keine Datenbankschemamigration**.
 
 ## OpenAI
 
@@ -188,7 +198,7 @@ Der OpenAI-API-Key bleibt serverseitig in der Home-Assistant-App-Konfiguration u
 
 ## Release-Prüfungen
 
-Vor Merge laufen Python-Compilecheck einschließlich Custom Integration, JavaScript-Syntaxchecks, vollständige Pytest-Regression über den v0.2.24-Entry-Point, KI-Einstellungs-/Validierungs-/Datensparsamkeitsprüfungen, Kalender-/Synchronisationsregressionen, realitätsnahe HAE-v2-Regressionstests, >262144-Zeichen-Relaytest, Rate-/Slow-Body-Webhooktests, PNG-Decode-/Inline-Brand-Regression, 16-Wochen-Marathonsimulation, neun randomisierte Läuferprofile, `pip check`, `pip-audit`, Git-History-Secret-Scan, Bandit-Gate, Docker-Build, direkter HAE-E2E, interner Relay-E2E, externe Ingress-Spoofing-Negativtests und positive Home-Assistant-Ingress-Netzsimulation.
+Vor Merge laufen Python-Compilecheck einschließlich Custom Integration, JavaScript-Syntaxchecks, vollständige Pytest-Regression über den v0.2.25-Entry-Point, Laufdetail-/GPS-/Zeitreihen-/Downsampling-Regressionen, KI-Einstellungs-/Validierungs-/Datensparsamkeitsprüfungen, Kalender-/Synchronisationsregressionen, realitätsnahe HAE-v2-Regressionstests, >262144-Zeichen-Relaytest, Rate-/Slow-Body-Webhooktests, PNG-Decode-/Inline-Brand-Regression, 16-Wochen-Marathonsimulation, neun randomisierte Läuferprofile, `pip check`, `pip-audit`, Git-History-Secret-Scan, Bandit-Gate, Docker-Build, direkter HAE-E2E, interner Relay-E2E, externe Ingress-Spoofing-Negativtests und positive Home-Assistant-Ingress-Netzsimulation.
 
 Statisch/isoliert und in Linux/Docker getestet. Die echte Home-Assistant-OS-/Custom-Integration-/Nabu-Casa-Remote-UI-/Health-Auto-Export-iPhone-Integration muss nach Installation auf dem Zielsystem lokal verifiziert werden.
 
@@ -200,7 +210,7 @@ export LAUFAPP_DATA_DIR=/tmp/laufapp-data
 export LAUFAPP_TRANSFER_DIR=/tmp/laufapp-transfer
 export LAUFAPP_TRUSTED_INGRESS_ONLY=0
 export LAUFAPP_HEALTH_AUTO_EXPORT_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
-uvicorn main_v0224:app --host 127.0.0.1 --port 8099 --no-proxy-headers
+uvicorn main_v0225:app --host 127.0.0.1 --port 8099 --no-proxy-headers
 ```
 
-Weitere Details: `SECURITY.md`, `NABU_CASA_HEALTH_SYNC.md`, `RELEASE_NOTES_v0.2.24.md`, `TRAINING_ENGINE.md`, `MIGRATIONS.md`.
+Weitere Details: `SECURITY.md`, `NABU_CASA_HEALTH_SYNC.md`, `RELEASE_NOTES_v0.2.25.md`, `TRAINING_ENGINE.md`, `MIGRATIONS.md`.
