@@ -20,14 +20,15 @@ def test_versions_and_assets():
     assert (ROOT/'RELEASE_NOTES_v0.2.21.md').exists()
     assert 'Laufapp v0.2.21' in (ROOT/'RELEASE_NOTES_v0.2.21.md').read_text()
     static=ROOT/'laufapp/app/static'
-    for name in ['index.html','styles.css','bugfix.css','app.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','apple-touch-icon.png','assets/bugfix.css','assets/v020.js','assets/v020.css','assets/v020_science.js','assets/v020_science.css','assets/v023_aggressiveness.js','assets/v025.js','assets/v025.css','assets/v0213.js','assets/v0213.css','assets/v0214.js','assets/v0214.css','assets/v0215.css','assets/v0217.css','assets/v0220.css']:assert (static/name).exists()
+    for name in ['index.html','styles.css','bugfix.css','app.js','manifest.webmanifest','sw.js','icon.svg','icon-192.png','apple-touch-icon.png','assets/bugfix.css','assets/v020.js','assets/v020.css','assets/v020_science.js','assets/v020_science.css','assets/v023_aggressiveness.js','assets/v025.js','assets/v025.css','assets/v0213.js','assets/v0213.css','assets/v0214.js','assets/v0214.css','assets/v0215.css','assets/v0217.css','assets/v0220.css']:assert (static/name).exists()
+    assert not (static/'icon-512.png').exists()
     m=json.loads((static/'manifest.webmanifest').read_text());assert m['display']=='standalone'
-    assert m['icons'][0]['src']=='icon-192.png?v=0.2.21'
-    assert m['icons'][1]['src']=='icon-512.png?v=0.2.21'
+    assert m['icons'][0]['src']=='icon.svg?v=0.2.21'
+    assert m['icons'][0]['sizes']=='any' and m['icons'][0]['type']=='image/svg+xml'
+    assert m['icons'][1]['src']=='icon-192.png?v=0.2.21'
     expected_icons={
-        'icon-192.png':((192,192),'fce1d0a2ee1a18e0ed4e70ab1822b4ff7b8c3960a320a7b92948f00d1ee917ce'),
-        'icon-512.png':((512,512),'d5564b659d0f0c27f1658545810e98d134a968a133ebcd5e2de92f153d5759f0'),
-        'apple-touch-icon.png':((180,180),'a4dfe0d326f7b5ac36ee11cbd9c1946addd72dc2e51d6b7e2e298bbedb33aacf'),
+        'icon-192.png':((192,192),'e91735bc799b8eac390a0342d1b3380f8eea122788a963cb704674056d8f9ba8'),
+        'apple-touch-icon.png':((180,180),'a05d8f0a565a4c033ee8f6a20840d330508744accd8186c92a3aa70e5c906efe'),
     }
     for name,(dims,digest) in expected_icons.items():
         path=static/name
@@ -35,7 +36,8 @@ def test_versions_and_assets():
         assert hashlib.sha256(path.read_bytes()).hexdigest()==digest
     sw=(static/'sw.js').read_text()
     assert "const CACHE='laufapp-v0.2.21'" in sw
-    assert 'icon-192.png?v=0.2.21' in sw and 'icon-512.png?v=0.2.21' in sw and 'apple-touch-icon.png?v=0.2.21' in sw
+    assert 'icon.svg?v=0.2.21' in sw and 'icon-192.png?v=0.2.21' in sw and 'apple-touch-icon.png?v=0.2.21' in sw
+    assert 'icon-512.png' not in sw
     assert 'assets/v0220.css?v=0.2.20' in sw
     assert 'assets/v0213.js?v=0.2.13' in sw and 'assets/v0213.css?v=0.2.13' in sw and 'assets/v0215.css?v=0.2.15' in sw
     assert 'assets/v0214.js?v=0.2.14' not in sw and 'assets/v0214.css?v=0.2.14' not in sw
