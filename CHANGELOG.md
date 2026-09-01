@@ -1,5 +1,13 @@
 # Laufapp Changelog
 
+## v0.2.21 – 2026-09-01
+
+- Produktionsfehler des v0.2.20-Header-Icons behoben: `index.html` forderte `/icon-192.png` an, die FastAPI-App stellte diesen Top-Level-Pfad jedoch nicht bereit; der Browser erhielt HTTP 404 und Safari zeigte einen Bildfehler-Platzhalter.
+- Explizite `image/png`-Routen für `/icon-192.png` und `/icon-512.png` ergänzt; das freigegebene schwarze/neon-grüne Laufmotiv selbst bleibt unverändert.
+- Header-URL auf `icon-192.png?v=0.2.21` cache-busted, damit ein zuvor fehlgeschlagener Abruf nicht aus Browser-/WebView-Caches übernommen wird.
+- Neue Regression ruft exakt die Browser-URL auf, verlangt HTTP 200 und validiert die PNG-Struktur inklusive Chunk-CRC und IDAT-Dekompression; auch 512-Pixel- und Apple-Touch-Pfad werden geprüft.
+- Keine Datenbankschemamigration und keine Änderung an Trainingsengine, Apple Health, Health Auto Export, Nabu-Casa-/Ingress-Security oder dem unabhängig versionierten Home-Assistant-Relay.
+
 ## v0.2.20 – 2026-09-01
 
 - Freigegebenes schwarzes/neon-grünes Lauf-Icon mit Läufer und drei Bewegungslinien ersetzt das bisherige per CSS gezeichnete Header-Symbol.
