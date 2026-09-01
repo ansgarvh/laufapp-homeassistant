@@ -1,5 +1,13 @@
 # Laufapp Changelog
 
+## v0.2.20 – 2026-09-01
+
+- Freigegebenes schwarzes/neon-grünes Lauf-Icon mit Läufer und drei Bewegungslinien ersetzt das bisherige per CSS gezeichnete Header-Symbol.
+- Dasselbe Motiv wird konsistent als 192-/512-Pixel-PWA-Icon und Apple-Touch-Icon ausgeliefert; das zuvor referenzierte, aber fehlende `apple-touch-icon.png` wurde ergänzt.
+- PWA-Manifest, Service-Worker-Cache und Icon-URLs wurden auf v0.2.20 cache-busted, damit alte Icon-Caches nicht weiter angezeigt werden.
+- Neue Regression prüft Header-Einbindung, Icon-Abmessungen und feste SHA-256-Prüfsummen der freigegebenen Assets.
+- Keine Datenbankschemamigration und keine Änderung an Trainingsengine, Health Auto Export, Nabu-Casa-/Ingress-Security oder dem unabhängig versionierten Home-Assistant-Relay.
+
 ## v0.2.19 – 2026-09-01
 
 - Manuell ohne verknüpften Lauf als `completed` markierte Planaktivitäten können über **„Absolvierung zurücknehmen“** wieder auf `planned` gesetzt werden.
