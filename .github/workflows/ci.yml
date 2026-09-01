@@ -39,6 +39,7 @@ jobs:
           node --check laufapp/app/static/assets/v020_science.js
           node --check laufapp/app/static/assets/v023_aggressiveness.js
           node --check laufapp/app/static/assets/v025.js
+          node --check laufapp/app/static/assets/v0225.js
       - name: Full regression suite
         run: pytest -q
       - name: 16-week marathon simulation
@@ -85,6 +86,8 @@ jobs:
           curl -fsS -D /tmp/root.headers -o /tmp/root.html http://127.0.0.1:18099/
           grep -qi '^cache-control: no-store, max-age=0' /tmp/root.headers
           grep -q 'assets/v025.js?v=0.2.5' /tmp/root.html
+          grep -q 'assets/v0225.css?v=0.2.25' /tmp/root.html
+          grep -q 'assets/v0225.js?v=0.2.25' /tmp/root.html
           curl -fsS -o /tmp/races.json http://127.0.0.1:18099/api/v2/races
           curl -fsS -o /tmp/settings.json http://127.0.0.1:18099/api/settings
           curl -fsS -o /tmp/marks.json http://127.0.0.1:18099/api/v2/performance-marks
