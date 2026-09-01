@@ -1,5 +1,5 @@
 name: "Laufapp"
-version: "0.2.18"
+version: "0.2.19"
 slug: "laufapp"
 description: "Privater datenbasierter Laufcoach als PWA mit Apple-Health-Import, gehärtetem Health Auto Export und optionalem OpenAI-Coach."
 arch:
