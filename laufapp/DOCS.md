@@ -1,4 +1,4 @@
-# Laufapp v0.2.23 – Bedienung
+# Laufapp v0.2.24 – Bedienung
 
 ## Heute
 Wettkampfziel, aktuelle Prognose, Zielbewertung, nächste Einheit und Recovery-Signale.
@@ -11,6 +11,11 @@ Vier geplante Laufeinheiten mit Distanz, Pace, RPE und Status. Einheiten können
 
 ## Coach
 Der Coach berücksichtigt Wettkampf, Wochenplan, Prognosen, jüngste Läufe und relevante Health-Trends. Die letzten lokalen Chatnachrichten werden als begrenzter Gesprächskontext verwendet. Planänderungen müssen immer bestätigt werden.
+
+## KI & Datenschutz
+Unter **Mehr** den Menüpunkt **KI & Datenschutz** öffnen. Dort können Coach-Modell, Screenshot-Modell, Monatsbudget und wissenschaftliche Websuche eingestellt werden. Der API-Key selbst bleibt in **Home Assistant → Einstellungen → Apps → Laufapp → Konfiguration → openai_api_key** und wird nicht im Browser angezeigt.
+
+Die Ansicht dokumentiert außerdem die Datenminimierung für einzelne Laufanalysen: übertragen werden nur ausgewählte Laufaggregate und der unmittelbar relevante Trainingskontext, niemals GPS-Rohkoordinaten oder die vollständige Health-Datenbank.
 
 ## KI-Feedback zu einem Lauf
 Unter **Fortschritt** einen Lauf öffnen und **Mit KI analysieren** wählen. Angezeigt werden Soll–Ist, Pace/Verlauf, Herzfrequenz, Laufdynamik, Recovery, nächster Schritt und Datenqualität. Die Analyse wird lokal gespeichert. Nach einer Änderung an RPE, Schuh oder Notiz wird sie als veraltet gekennzeichnet; erst **Erneut analysieren** verursacht einen neuen API-Aufruf.

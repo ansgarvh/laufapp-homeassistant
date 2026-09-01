@@ -1,5 +1,14 @@
 # Laufapp Changelog
 
+## v0.2.24 – 2026-09-01
+
+- Unter **Mehr** einen echten Menüpunkt **KI & Datenschutz** ergänzt; die bisherige reine Statuskarte bleibt als kompakte Übersicht erhalten.
+- Coach-Modell, Screenshot-Modell, Monatsbudget und wissenschaftliche Websuche sind jetzt über die bereits validierte Settings-API bedienbar.
+- Verbindungsstatus und genauer Home-Assistant-Pfad für die serverseitige API-Key-Konfiguration werden angezeigt; der Key wird nicht an den Browser geliefert.
+- Datenschutzansicht erläutert freigegebene Laufaggregate, Ausschluss von GPS-Rohkoordinaten/vollständiger Health-Datenbank, `store=false`, lokale Analysespeicherung und bestätigungspflichtige Planänderungen.
+- Mobile Darstellung bis 320 px abgesichert. Keine Datenbankschemamigration, keine Änderung an Trainingsengine, Ingress, Health Auto Export oder Home-Assistant-Relay.
+- Lokale Validierung: **185/185 Pytests**, Syntax-/Security-Gates, HTTP-E2E, 16-Wochen-Simulation und neun randomisierte Läuferprofile erfolgreich.
+
 ## v0.2.23 – 2026-09-01
 
 - Coach-Chat auf begrenzten lokalen Mehrturn-Kontext und schemafeste OpenAI Structured Outputs erweitert.

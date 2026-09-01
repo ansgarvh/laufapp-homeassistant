@@ -1,0 +1,29 @@
+"""Laufapp v0.2.24 AI settings and privacy UI.
+
+This composition layer preserves the v0.2.23 coach, per-run analysis,
+training, Health Auto Export, Ingress, relay and persistence behaviour.  The
+release itself only exposes the already existing validated AI settings in the
+mobile frontend.
+"""
+from __future__ import annotations
+
+import main_v0223 as previous
+
+APP_VERSION = "0.2.24"
+
+_module = previous
+for _ in range(40):
+    if _module is None:
+        break
+    if hasattr(_module, "APP_VERSION"):
+        _module.APP_VERSION = APP_VERSION
+    _module = getattr(_module, "previous", None)
+
+core = previous.core
+core.db_module.APP_VERSION = APP_VERSION
+core.legacy.APP_VERSION = APP_VERSION
+core.legacy.app.version = APP_VERSION
+core.training.VERSION = APP_VERSION
+
+process_health_auto_export_request = previous.process_health_auto_export_request
+app = previous.app

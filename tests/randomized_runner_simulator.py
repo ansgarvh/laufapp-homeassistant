@@ -13,7 +13,7 @@ APP = ROOT / "laufapp" / "app"
 if str(APP) not in sys.path:
     sys.path.insert(0, str(APP))
 
-import main_v0223  # noqa: F401 - activates current release wiring
+import main_v0224  # noqa: F401 - activates current release wiring
 import training as base
 import training_v020 as training
 from db import connect, init_db, set_setting

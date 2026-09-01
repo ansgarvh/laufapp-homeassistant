@@ -8,7 +8,7 @@ app network; the same strong Laufapp token is required on that internal hop.
 
 from fastapi import FastAPI, Header, Request
 
-from main_v0223 import APP_VERSION, process_health_auto_export_request
+from main_v0224 import APP_VERSION, process_health_auto_export_request
 
 app = FastAPI(
     title="Laufapp Health Sync Gateway",
