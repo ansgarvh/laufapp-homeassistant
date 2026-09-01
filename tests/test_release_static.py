@@ -11,16 +11,16 @@ def _png_size(path):
 
 def test_versions_and_assets():
     cfg=yaml.safe_load((ROOT/'laufapp/config.yaml').read_text())
-    assert cfg['version']=='0.2.22'
-    assert 'APP_VERSION = "0.2.22"' in (ROOT/'laufapp/app/main_v0222.py').read_text()
-    assert 'ARG BUILD_VERSION=0.2.22' in (ROOT/'laufapp/Dockerfile').read_text()
-    assert 'main_v0222:app' in (ROOT/'laufapp/run.sh').read_text()
-    assert '# Laufapp v0.2.22' in (ROOT/'README.md').read_text()
-    assert '## v0.2.22 – 2026-09-01' in (ROOT/'CHANGELOG.md').read_text()
-    assert (ROOT/'RELEASE_NOTES_v0.2.22.md').exists()
-    assert 'Laufapp v0.2.22' in (ROOT/'RELEASE_NOTES_v0.2.22.md').read_text()
+    assert cfg['version']=='0.2.23'
+    assert 'APP_VERSION = "0.2.23"' in (ROOT/'laufapp/app/main_v0223.py').read_text()
+    assert 'ARG BUILD_VERSION=0.2.23' in (ROOT/'laufapp/Dockerfile').read_text()
+    assert 'main_v0223:app' in (ROOT/'laufapp/run.sh').read_text()
+    assert '# Laufapp v0.2.23' in (ROOT/'README.md').read_text()
+    assert '## v0.2.23 – 2026-09-01' in (ROOT/'CHANGELOG.md').read_text()
+    assert (ROOT/'RELEASE_NOTES_v0.2.23.md').exists()
+    assert 'Laufapp v0.2.23' in (ROOT/'RELEASE_NOTES_v0.2.23.md').read_text()
     static=ROOT/'laufapp/app/static'
-    for name in ['index.html','styles.css','bugfix.css','app.js','manifest.webmanifest','sw.js','icon.svg','icon-192.png','apple-touch-icon.png','assets/bugfix.css','assets/v020.js','assets/v020.css','assets/v020_science.js','assets/v020_science.css','assets/v023_aggressiveness.js','assets/v025.js','assets/v025.css','assets/v0213.js','assets/v0213.css','assets/v0214.js','assets/v0214.css','assets/v0215.css','assets/v0217.css','assets/v0220.css','assets/v0222.css']:assert (static/name).exists()
+    for name in ['index.html','styles.css','bugfix.css','app.js','manifest.webmanifest','sw.js','icon.svg','icon-192.png','apple-touch-icon.png','assets/bugfix.css','assets/v020.js','assets/v020.css','assets/v020_science.js','assets/v020_science.css','assets/v023_aggressiveness.js','assets/v025.js','assets/v025.css','assets/v0213.js','assets/v0213.css','assets/v0214.js','assets/v0214.css','assets/v0215.css','assets/v0217.css','assets/v0220.css','assets/v0222.css','assets/v0223.css']:assert (static/name).exists()
     assert not (static/'icon-512.png').exists()
     m=json.loads((static/'manifest.webmanifest').read_text());assert m['display']=='standalone'
     assert m['icons'][0]['src']=='icon.svg?v=0.2.21'
@@ -35,15 +35,15 @@ def test_versions_and_assets():
         assert _png_size(path)==dims
         assert hashlib.sha256(path.read_bytes()).hexdigest()==digest
     sw=(static/'sw.js').read_text()
-    assert "const CACHE='laufapp-v0.2.22'" in sw
+    assert "const CACHE='laufapp-v0.2.23'" in sw
     assert 'icon.svg?v=0.2.21' in sw and 'icon-192.png?v=0.2.21' in sw and 'apple-touch-icon.png?v=0.2.21' in sw
     assert 'icon-512.png' not in sw
     assert 'assets/v0220.css?v=0.2.20' in sw
-    assert 'app.js?v=0.2.22' in sw and 'assets/v0222.css?v=0.2.22' in sw
+    assert 'app.js?v=0.2.23' in sw and 'assets/v0222.css?v=0.2.22' in sw and 'assets/v0223.css?v=0.2.23' in sw
     assert 'assets/v0213.js?v=0.2.13' in sw and 'assets/v0213.css?v=0.2.13' in sw and 'assets/v0215.css?v=0.2.15' in sw
     assert 'assets/v0214.js?v=0.2.14' not in sw and 'assets/v0214.css?v=0.2.14' not in sw
     index=(static/'index.html').read_text()
-    for asset in ['app.js?v=0.2.22','manifest.webmanifest?v=0.2.21','apple-touch-icon.png?v=0.2.21','assets/v0220.css?v=0.2.20','assets/v0222.css?v=0.2.22','assets/bugfix.css?v=0.2.5','assets/v020.css?v=0.2.18','assets/v020.js?v=0.2.18','assets/v020_science.js?v=0.2.5','assets/v023_aggressiveness.js?v=0.2.5','assets/v025.js?v=0.2.5','assets/v025.css?v=0.2.5','assets/v0213.js?v=0.2.13','assets/v0213.css?v=0.2.13','assets/v0215.css?v=0.2.15','assets/v0217.css?v=0.2.17']:
+    for asset in ['app.js?v=0.2.23','manifest.webmanifest?v=0.2.21','apple-touch-icon.png?v=0.2.21','assets/v0220.css?v=0.2.20','assets/v0222.css?v=0.2.22','assets/v0223.css?v=0.2.23','assets/bugfix.css?v=0.2.5','assets/v020.css?v=0.2.18','assets/v020.js?v=0.2.18','assets/v020_science.js?v=0.2.5','assets/v023_aggressiveness.js?v=0.2.5','assets/v025.js?v=0.2.5','assets/v025.css?v=0.2.5','assets/v0213.js?v=0.2.13','assets/v0213.css?v=0.2.13','assets/v0215.css?v=0.2.15','assets/v0217.css?v=0.2.17']:
         assert asset in index
     assert '<span class="brand-mark"><img src="data:image/png;base64,' in index
     assert '<span class="brand-mark"><img src="icon-192.png' not in index
@@ -96,7 +96,7 @@ def test_ha_app_config_and_health_auto_export_gateway():
     gateway=(ROOT/'laufapp/app/health_auto_export_gateway.py').read_text()
     assert '@app.post("/health-auto-export")' in gateway
     assert '@app.post("/home-assistant-relay")' in gateway
-    assert 'from main_v0222 import APP_VERSION' in gateway
+    assert 'from main_v0223 import APP_VERSION' in gateway
     assert 'LAUFAPP_HAE_RELAY_OK transport=nabu_casa' in gateway
     assert 'openapi_url=None' in gateway and 'Cache-Control' in gateway
     hae=(ROOT/'laufapp/app/health_auto_export_v027.py').read_text()
@@ -130,6 +130,8 @@ def test_ha_app_config_and_health_auto_export_gateway():
     assert (ROOT/'laufapp/app/main_v0214.py').exists() and (ROOT/'laufapp/app/main_v0215.py').exists()
     assert (ROOT/'laufapp/app/main_v0220.py').exists() and (ROOT/'laufapp/app/main_v0221.py').exists()
     assert (ROOT/'laufapp/app/main_v0222.py').exists()
+    assert (ROOT/'laufapp/app/main_v0223.py').exists()
+    assert (ROOT/'laufapp/app/coach_v0223.py').exists()
     assert (ROOT/'laufapp/app/training_calendar_guardrails_v0222.py').exists()
     assert (ROOT/'laufapp/app/data_sync_v0222.py').exists()
     assert not (ROOT/'laufapp/app/main_v030.py').exists()

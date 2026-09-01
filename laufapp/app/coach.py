@@ -43,12 +43,18 @@ def parse_json(text):
         try:return json.loads(m.group())
         except:pass
     return {'reply':text}
-def request(model,input_data,tools=None,effort='medium'):
+def request(model,input_data,tools=None,effort='medium',structured_output=None,max_output_tokens=None):
     try:from openai import OpenAI
     except ImportError as e:raise RuntimeError("Das Python-Paket 'openai' ist nicht installiert.") from e
-    kwargs={'model':model,'input':input_data,'reasoning':{'effort':effort}}
+    # The Laufapp keeps its own deliberately small local history. OpenAI response
+    # objects are therefore never needed as server-side conversation state.
+    kwargs={'model':model,'input':input_data,'reasoning':{'effort':effort},'store':False}
     if tools:kwargs['tools']=tools
-    return OpenAI(api_key=api_key()).responses.create(**kwargs)
+    if structured_output:
+        kwargs['text']={'format':{'type':'json_schema','name':structured_output['name'],'description':structured_output.get('description',''),'strict':True,'schema':structured_output['schema']}}
+    if max_output_tokens is not None:kwargs['max_output_tokens']=int(max_output_tokens)
+    try:return OpenAI(api_key=api_key()).responses.create(**kwargs)
+    except Exception as e:raise RuntimeError('OpenAI-Anfrage fehlgeschlagen. Prüfe API-Key, Guthaben und Netzwerkverbindung.') from e
 
 def health_context(c):
     since=(date.today()-timedelta(days=21)).isoformat();rows=c.execute("SELECT metric_type,value FROM health_metrics WHERE start_at>=? ORDER BY start_at",(since,)).fetchall();g={}

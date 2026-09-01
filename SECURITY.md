@@ -96,7 +96,11 @@ Trainingsdaten, Wettkämpfe, Schuhe, Health-Metriken, Laufzeitreihen, GPS-Punkte
 
 ## OpenAI / KI
 
-Der OpenAI-Key bleibt serverseitig. Der Coach erhält nur den für die konkrete Analyse zusammengestellten Trainingskontext. Screenshots werden nur nach expliziter Nutzeraktion an die OpenAI API gesendet und nicht dauerhaft als Bild gespeichert. KI-Vorschläge können den Trainingsplan nicht eigenständig verändern: Änderungen werden serverseitig validiert und müssen ausdrücklich bestätigt werden.
+Der OpenAI-Key bleibt serverseitig und wird nie an den Browser ausgeliefert. Der Coach erhält nur den für die konkrete Anfrage zusammengestellten Trainingskontext. Bei der Analyse eines einzelnen Laufs werden ausschließlich lokal abgeleitete Kennwerte, die verknüpfte Planeinheit, kompakte Vergleichswerte, Wochenlast und relevante Recovery-Aggregate übertragen; GPS-Rohkoordinaten und die vollständige Health-Datenbank werden nicht übertragen. Screenshots werden nur nach expliziter Nutzeraktion an die OpenAI API gesendet und nicht dauerhaft als Bild gespeichert.
+
+Alle Responses-Aufrufe setzen `store=false`, damit kein abrufbares OpenAI-Response-Objekt als Anwendungszustand gespeichert wird. Das ersetzt keine Zero-Data-Retention-Vereinbarung: Standardmäßige Abuse-Monitoring-Logs können abhängig von den Datenkontrollen des OpenAI-Projekts bis zu 30 Tage bestehen. Strukturierte Antworten werden gegen ein festes JSON-Schema angefordert; Laufnotizen und sonstige eingebettete Texte sind im Prompt ausdrücklich unvertraute Daten und dürfen keine Systemanweisungen überschreiben.
+
+KI-Vorschläge können den Trainingsplan nicht eigenständig verändern: Änderungen werden serverseitig gegen konservative Grenzen validiert, als offen gespeichert und müssen ausdrücklich bestätigt werden. Ein identischer offener Vorschlag wird nicht erneut angelegt.
 
 ## Supply Chain und CI
 

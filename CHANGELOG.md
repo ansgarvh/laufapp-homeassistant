@@ -1,5 +1,16 @@
 # Laufapp Changelog
 
+## v0.2.23 – 2026-09-01
+
+- Coach-Chat auf begrenzten lokalen Mehrturn-Kontext und schemafeste OpenAI Structured Outputs erweitert.
+- Jeder gespeicherte Lauf kann unter Fortschritt ausdrücklich einzeln analysiert werden; die strukturierte Rückmeldung umfasst Soll–Ist, Pace/Verlauf, Herzfrequenz, Laufdynamik, Recovery, nächsten Schritt und Datenqualität.
+- Einzelanalysen werden lokal gespeichert, ohne neuen API-Aufruf erneut angezeigt und nach geänderten Laufdaten als veraltet markiert. Eine Neuberechnung erfolgt nur über **Erneut analysieren**.
+- Datensparsame Übergabe: ausgewählter Lauf mit lokal berechneten Aggregaten, verknüpfter Planeinheit, kompakten Vergleichsläufen, Wochenlast und Recovery-Kontext; keine GPS-Rohkoordinaten und keine vollständige Health-Datenbank.
+- OpenAI Responses werden mit `store=false` angefordert; API-Key bleibt serverseitig. Laufnotizen und sonstige Kontextstrings werden als unvertraute Daten gekennzeichnet.
+- Planänderungen bleiben serverseitig validierte, bestätigungspflichtige Vorschläge. Identische offene Vorschläge werden nicht dupliziert.
+- Keine Datenbankschemamigration; keine Änderung an Trainingsengine, Health Auto Export, Nabu-Casa-/Ingress-Security oder dem unabhängig versionierten Home-Assistant-Relay.
+- Lokale Validierung: **183/183 Pytests**, Syntax-/Security-Gates, 16-Wochen-Simulation und neun randomisierte Läuferprofile erfolgreich. Reale OpenAI-, Home-Assistant-OS- und iPhone-/Ingress-Integration müssen lokal verifiziert werden.
+
 ## v0.2.22 – 2026-09-01
 
 - Automatische Quality-/Easy-Doppeltage werden normalerweise als **Qualität → Easy** geordnet; nur zukünftige, geplante und unveränderte Engine-Slots dürfen getauscht werden.
