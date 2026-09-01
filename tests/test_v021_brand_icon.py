@@ -3,6 +3,7 @@ import hashlib
 from pathlib import Path
 import re
 import struct
+import xml.etree.ElementTree as ET
 import zlib
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -57,10 +58,26 @@ def test_header_uses_approved_inline_png_without_separate_asset_request():
     assert '<span class="brand-mark"><img src="icon-192.png' not in index
 
 
-def test_pwa_png_assets_are_structurally_decodable():
+def test_referenced_png_assets_are_structurally_decodable():
     for name, size in {
         "icon-192.png": (192, 192),
-        "icon-512.png": (512, 512),
         "apple-touch-icon.png": (180, 180),
     }.items():
         _validate_png_bytes((STATIC / name).read_bytes(), size)
+    assert not (STATIC / "icon-512.png").exists()
+
+
+def test_pwa_svg_is_self_contained_and_matches_brand_palette():
+    svg_path = STATIC / "icon.svg"
+    svg = svg_path.read_text()
+    root = ET.fromstring(svg)
+    assert root.tag == "{http://www.w3.org/2000/svg}svg"
+    assert root.attrib["viewBox"] == "0 0 512 512"
+    assert '#000' in svg and '#b9ff16' in svg
+    assert svg.count('M112 183h70') == 1
+    assert svg.count('M95 251h72') == 1
+    assert svg.count('M82 319h72') == 1
+    assert 'href=' not in svg and 'http://' not in svg.replace('http://www.w3.org/2000/svg', '')
+    manifest = (STATIC / "manifest.webmanifest").read_text()
+    assert '"src":"icon.svg?v=0.2.21","sizes":"any","type":"image/svg+xml"' in manifest
+    assert 'icon-512.png' not in manifest
