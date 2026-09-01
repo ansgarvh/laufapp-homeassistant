@@ -1,5 +1,13 @@
 # Laufapp Changelog
 
+## v0.2.19 – 2026-09-01
+
+- Manuell ohne verknüpften Lauf als `completed` markierte Planaktivitäten können über **„Absolvierung zurücknehmen“** wieder auf `planned` gesetzt werden.
+- Verknüpfte Läufe bleiben autoritativ: Das Backend blockiert `planned`/`skipped` für Workouts mit `linked_run_id`, statt widersprüchliche Statusdaten zu erzeugen.
+- Die Rücknahme behält `manual_override=1` und `modified_by=user`, damit eine bewusst angefasste Einheit bei späterer Plangenerierung geschützt bleibt.
+- UI unterscheidet jetzt zwischen manuellem Abschluss und Abschluss durch verknüpften Lauf; bei verknüpften Läufen wird keine irreführende Undo-Aktion angeboten.
+- Neue Regressionen prüfen manuellen Completed→Planned-Roundtrip, verknüpfte Statussperre und UI-Hooks. Keine Datenbankschemamigration.
+
 ## v0.2.18 – 2026-08-31
 
 - Mehrere A-Rennen werden chronologisch behandelt: Das frühere A-Rennen bleibt bis zu seiner Rennwoche alleiniger Planfokus; spätere A-Ziele verändern keine davorliegenden Wochen.
