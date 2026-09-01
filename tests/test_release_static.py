@@ -25,9 +25,9 @@ def test_versions_and_assets():
     assert m['icons'][0]['src']=='icon-192.png?v=0.2.21'
     assert m['icons'][1]['src']=='icon-512.png?v=0.2.21'
     expected_icons={
-        'icon-192.png':((192,192),'e91735bc799b8eac390a0342d1b3380f8eea122788a963cb704674056d8f9ba8'),
-        'icon-512.png':((512,512),'af388ec4b93186891a8019e76d99b517f113e1ed07f1bce2519c2aedcfc9731e'),
-        'apple-touch-icon.png':((180,180),'a05d8f0a565a4c033ee8f6a20840d330508744accd8186c92a3aa70e5c906efe'),
+        'icon-192.png':((192,192),'fce1d0a2ee1a18e0ed4e70ab1822b4ff7b8c3960a320a7b92948f00d1ee917ce'),
+        'icon-512.png':((512,512),'d5564b659d0f0c27f1658545810e98d134a968a133ebcd5e2de92f153d5759f0'),
+        'apple-touch-icon.png':((180,180),'a4dfe0d326f7b5ac36ee11cbd9c1946addd72dc2e51d6b7e2e298bbedb33aacf'),
     }
     for name,(dims,digest) in expected_icons.items():
         path=static/name
