@@ -11,14 +11,14 @@ def _png_size(path):
 
 def test_versions_and_assets():
     cfg=yaml.safe_load((ROOT/'laufapp/config.yaml').read_text())
-    assert cfg['version']=='0.2.20'
-    assert 'APP_VERSION = "0.2.20"' in (ROOT/'laufapp/app/main_v0220.py').read_text()
-    assert 'ARG BUILD_VERSION=0.2.20' in (ROOT/'laufapp/Dockerfile').read_text()
-    assert 'main_v0220:app' in (ROOT/'laufapp/run.sh').read_text()
-    assert '# Laufapp v0.2.20' in (ROOT/'README.md').read_text()
-    assert '## v0.2.20 – 2026-09-01' in (ROOT/'CHANGELOG.md').read_text()
-    assert (ROOT/'RELEASE_NOTES_v0.2.20.md').exists()
-    assert 'Laufapp v0.2.20' in (ROOT/'RELEASE_NOTES_v0.2.20.md').read_text()
+    assert cfg['version']=='0.2.21'
+    assert 'APP_VERSION = "0.2.21"' in (ROOT/'laufapp/app/main_v0221.py').read_text()
+    assert 'ARG BUILD_VERSION=0.2.21' in (ROOT/'laufapp/Dockerfile').read_text()
+    assert 'main_v0221:app' in (ROOT/'laufapp/run.sh').read_text()
+    assert '# Laufapp v0.2.21' in (ROOT/'README.md').read_text()
+    assert '## v0.2.21 – 2026-09-01' in (ROOT/'CHANGELOG.md').read_text()
+    assert (ROOT/'RELEASE_NOTES_v0.2.21.md').exists()
+    assert 'Laufapp v0.2.21' in (ROOT/'RELEASE_NOTES_v0.2.21.md').read_text()
     static=ROOT/'laufapp/app/static'
     for name in ['index.html','styles.css','bugfix.css','app.js','manifest.webmanifest','sw.js','icon-192.png','icon-512.png','apple-touch-icon.png','assets/bugfix.css','assets/v020.js','assets/v020.css','assets/v020_science.js','assets/v020_science.css','assets/v023_aggressiveness.js','assets/v025.js','assets/v025.css','assets/v0213.js','assets/v0213.css','assets/v0214.js','assets/v0214.css','assets/v0215.css','assets/v0217.css','assets/v0220.css']:assert (static/name).exists()
     m=json.loads((static/'manifest.webmanifest').read_text());assert m['display']=='standalone'
@@ -40,9 +40,9 @@ def test_versions_and_assets():
     assert 'assets/v0213.js?v=0.2.13' in sw and 'assets/v0213.css?v=0.2.13' in sw and 'assets/v0215.css?v=0.2.15' in sw
     assert 'assets/v0214.js?v=0.2.14' not in sw and 'assets/v0214.css?v=0.2.14' not in sw
     index=(static/'index.html').read_text()
-    for asset in ['app.js?v=0.2.19','manifest.webmanifest?v=0.2.20','apple-touch-icon.png?v=0.2.20','icon-192.png?v=0.2.20','assets/v0220.css?v=0.2.20','assets/bugfix.css?v=0.2.5','assets/v020.css?v=0.2.18','assets/v020.js?v=0.2.18','assets/v020_science.js?v=0.2.5','assets/v023_aggressiveness.js?v=0.2.5','assets/v025.js?v=0.2.5','assets/v025.css?v=0.2.5','assets/v0213.js?v=0.2.13','assets/v0213.css?v=0.2.13','assets/v0215.css?v=0.2.15','assets/v0217.css?v=0.2.17']:
+    for asset in ['app.js?v=0.2.19','manifest.webmanifest?v=0.2.20','apple-touch-icon.png?v=0.2.20','icon-192.png?v=0.2.21','assets/v0220.css?v=0.2.20','assets/bugfix.css?v=0.2.5','assets/v020.css?v=0.2.18','assets/v020.js?v=0.2.18','assets/v020_science.js?v=0.2.5','assets/v023_aggressiveness.js?v=0.2.5','assets/v025.js?v=0.2.5','assets/v025.css?v=0.2.5','assets/v0213.js?v=0.2.13','assets/v0213.css?v=0.2.13','assets/v0215.css?v=0.2.15','assets/v0217.css?v=0.2.17']:
         assert asset in index
-    assert '<span class="brand-mark"><img src="icon-192.png?v=0.2.20"' in index
+    assert '<span class="brand-mark"><img src="icon-192.png?v=0.2.21"' in index
     css0220=(static/'assets/v0220.css').read_text()
     assert '.brand-mark:before,.brand-mark i{display:none}' in css0220
     assert '.brand-mark img{' in css0220
@@ -92,7 +92,7 @@ def test_ha_app_config_and_health_auto_export_gateway():
     gateway=(ROOT/'laufapp/app/health_auto_export_gateway.py').read_text()
     assert '@app.post("/health-auto-export")' in gateway
     assert '@app.post("/home-assistant-relay")' in gateway
-    assert 'from main_v0220 import APP_VERSION' in gateway
+    assert 'from main_v0221 import APP_VERSION' in gateway
     assert 'LAUFAPP_HAE_RELAY_OK transport=nabu_casa' in gateway
     assert 'openapi_url=None' in gateway and 'Cache-Control' in gateway
     hae=(ROOT/'laufapp/app/health_auto_export_v027.py').read_text()
@@ -124,7 +124,7 @@ def test_ha_app_config_and_health_auto_export_gateway():
     assert 'traceback.format_exc()' in imports
     assert 'resumed_after_restart' in imports
     assert (ROOT/'laufapp/app/main_v0214.py').exists() and (ROOT/'laufapp/app/main_v0215.py').exists()
-    assert (ROOT/'laufapp/app/main_v0220.py').exists()
+    assert (ROOT/'laufapp/app/main_v0220.py').exists() and (ROOT/'laufapp/app/main_v0221.py').exists()
     assert not (ROOT/'laufapp/app/main_v030.py').exists()
     assert not (ROOT/'laufapp/app/ios_healthkit_sync.py').exists()
 
