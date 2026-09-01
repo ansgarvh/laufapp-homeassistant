@@ -1,5 +1,13 @@
 # Laufapp Changelog
 
+## v0.2.20 – 2026-09-01
+
+- Freigegebenes schwarzes/neon-grünes Lauf-Icon mit Läufer und drei Bewegungslinien ersetzt das bisherige per CSS gezeichnete Header-Symbol.
+- Dasselbe Motiv wird konsistent als 192-/512-Pixel-PWA-Icon und Apple-Touch-Icon ausgeliefert; das zuvor referenzierte, aber fehlende `apple-touch-icon.png` wurde ergänzt.
+- PWA-Manifest, Service-Worker-Cache und Icon-URLs wurden auf v0.2.20 cache-busted, damit alte Icon-Caches nicht weiter angezeigt werden.
+- Neue Regression prüft Header-Einbindung, Icon-Abmessungen und feste SHA-256-Prüfsummen der freigegebenen Assets.
+- Keine Datenbankschemamigration und keine Änderung an Trainingsengine, Health Auto Export, Nabu-Casa-/Ingress-Security oder dem unabhängig versionierten Home-Assistant-Relay.
+
 ## v0.2.19 – 2026-09-01
 
 - Manuell ohne verknüpften Lauf als `completed` markierte Planaktivitäten können über **„Absolvierung zurücknehmen“** wieder auf `planned` gesetzt werden.
@@ -177,7 +185,6 @@
 - Dadurch werden **mehrere A-/B-Rennen** unter Einstellungen und **Planungsaggressivität Konservativ / Moderat / Aggressiv** nun tatsächlich im Home-Assistant-Frontend ausgeliefert.
 - Bestehende v0.1.9-Styles unter `assets/bugfix.css` bleiben durch einen kompatiblen Asset-Pfad erhalten.
 - Alle relevanten Frontend-Assets sind mit `?v=0.2.2` versioniert; der PWA-Cache wurde auf `laufapp-v0.2.2` erhöht.
-- Frontend-Antworten erhalten `Cache-Control: no-store, max-age=0`, damit Home-Assistant-/iOS-WebViews nach Add-on-Updates keinen veralteten App-Shell-Stand weiterverwenden.
 - Neuer v0.2.2-Entry-Point korrigiert ausschließlich Version und statische Auslieferung und übernimmt die getestete v0.2.1-API-/Trainingslogik unverändert.
 - Docker-Runtime-Smoke-Test erweitert: Im gestarteten Container müssen `v020.js` und `v020_science.js` per HTTP erreichbar sein; A-/B-Rennbegriffe, die drei Aggressivitätsstufen, `/api/v2/races` und `/api/settings` werden explizit geprüft.
 - Keine Datenbankschemamigration; bestehende Health-Daten, Läufe, Schuhe, Rennen, Trainingsplan und Coach-Daten bleiben unverändert.
