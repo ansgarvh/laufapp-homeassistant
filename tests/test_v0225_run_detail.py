@@ -108,6 +108,33 @@ def test_detailed_completed_run_endpoint_and_runtime_assets(setup_client):
     assert 'assets/v0225.js?v=0.2.25' in root.text
 
 
+def test_separate_total_calories_are_exposed_without_overwriting_active(client):
+    start = datetime.fromisoformat("2026-09-01T06:00:00+02:00")
+    created = client.post(
+        "/api/runs",
+        json={
+            "started_at": start.isoformat(),
+            "distance_km": 10.0,
+            "duration_s": 3300,
+            "calories": 700,
+            "source": "apple_health_hae",
+        },
+    )
+    assert created.status_code == 200, created.text
+    run_id = int(created.json()["id"])
+
+    from db import db_conn
+    with db_conn() as c:
+        _insert_sample(c, run_id, "total-energy-test", "total_calories", start.isoformat(), 805.5, "kcal")
+
+    response = client.get(f"/api/v2/runs/{run_id}/detail-view")
+    assert response.status_code == 200
+    summary = response.json()["summary"]
+    assert summary["active_calories_kcal"] == 700
+    assert summary["total_calories_kcal"] == 805.5
+    assert "separat" in response.json()["notes"]["total_calories"].casefold()
+
+
 def test_run_detail_missing_run_is_404(client):
     response = client.get("/api/v2/runs/999999/detail-view")
     assert response.status_code == 404
