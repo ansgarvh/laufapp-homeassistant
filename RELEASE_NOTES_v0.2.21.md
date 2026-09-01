@@ -6,7 +6,7 @@ Das in v0.2.20 eingeführte freigegebene Lauf-Icon wurde im Header als separate 
 
 v0.2.21 bettet das vom Nutzer freigegebene schwarze/neon-grüne Laufmotiv direkt als PNG-Data-URI in den Header ein. Für das sichtbare Branding ist damit kein separater Bildrequest mehr erforderlich; Pfad-, Ingress- und Browser-Cache-Effekte können den Header nicht mehr auf ein Broken-Image-Symbol zurückfallen lassen.
 
-Die vorhandenen PWA-/Apple-Touch-Assets bleiben erhalten und ihre Cache-Keys werden auf v0.2.21 angehoben. Eine neue Regression dekodiert das eingebettete PNG vollständig, prüft die feste SHA-256-Prüfsumme des freigegebenen 192-Pixel-Motivs und validiert die PNG-Struktur der PWA-Assets einschließlich Chunk-CRC und IDAT-Dekompression.
+Die verschärfte PNG-Regression hat zusätzlich nachgewiesen, dass das in v0.2.20 ausgelieferte 512-Pixel-PWA-Asset eine ungültige PNG-CRC enthielt. Die externen 192-/512-Pixel-PWA-Icons und das Apple-Touch-Icon wurden deshalb neu aus dem freigegebenen Motiv erzeugt und ihre Cache-Keys auf v0.2.21 angehoben. Die Regression dekodiert das eingebettete Header-PNG vollständig, prüft dessen feste SHA-256-Prüfsumme und validiert die externen PNGs einschließlich Chunk-CRC und IDAT-Dekompression.
 
 Keine Datenbankschemamigration. Trainingsengine, Bestzeiten, Apple-Health-Import, Health Auto Export, Nabu-Casa-Transport, Ingress-Sicherheitsgrenzen, persistente Daten und der unabhängig versionierte Home-Assistant-HAE-Relay bleiben funktional unverändert.
 
