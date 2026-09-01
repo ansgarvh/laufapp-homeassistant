@@ -22,6 +22,12 @@ Ein normaler vier-Tage-Marathonblock orientiert sich an Easy / Quality / Easy / 
 
 Die zusätzliche randomisierte Regression hat eine Lücke aufgedeckt: Bei `Qualitätseinheiten = 1` konnte neben einem MP-/Fast-Finish-Longrun noch eine substantielle Schwellen-Einheit entstehen. Damit enthielt die Woche faktisch zwei harte Reize, obwohl nur einer konfiguriert war. Der Fix behandelt den intensiven Longrun nun als den einzigen bedeutenden Qualitätsreiz. Der andere strukturierte Tag wird dann lediglich als kurze Ökonomie-/Aktivierungseinheit dosiert und darf nicht als zweite harte Schwellen-/VO₂max-Einheit auftreten. Dieser Fall ist dauerhaft in der randomisierten CI-Regression abgesichert.
 
+### Kalenderreihenfolge und 48-Stunden-Abstand
+
+Bei zwei direkt aufeinanderfolgenden Lauftagen mit genau einer Qualitätseinheit bevorzugt die Engine **Qualität → Easy**. Zwischen Schlüsselbelastungen werden möglichst mindestens 48 Stunden hergestellt. Weil der Plan nur Kalendertage und keine Startzeiten speichert, bildet die Engine dies konservativ als mindestens zwei Kalendertage Abstand ab.
+
+Als Schlüsselbelastung gelten Quality, Race-Prep, Rennen, spezifische Longruns sowie sehr lange Longruns ab 24 km oder geschätzten 120 Minuten. Automatisch permutiert werden ausschließlich zukünftige, geplante, unveränderte Engine-Slots vom Typ Easy, Quality oder Race-Prep. Longruns, Rennen, vergangene Termine, absolvierte/ausgefallene Einheiten, verknüpfte Läufe und manuell bearbeitete Einheiten bleiben autoritativ. Lässt sich ein Konflikt dadurch nicht sicher lösen, bleibt der Plan unverändert und der lokale Safety Check weist ihn aus.
+
 ## Intensitätsverteilung
 
 Für Marathontraining wird eine pyramidenförmige Verteilung angestrebt. Die Engine bewertet nicht eine einzelne Woche als starre Prozentvorgabe, sondern projiziert die Belastung rollierend über vier Wochen. `TrainingLoad` enthält dafür geschätzte Minuten niedrig/moderat/hoch sowie Zeit oberhalb LT1, um LT2, oberhalb LT2, Marathonpace-Minuten, Dauer, Distanz, Longrun-Dauer, Höhenmeter (wenn vorhanden), RPE und einen internen Belastungsscore.

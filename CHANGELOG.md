@@ -1,5 +1,15 @@
 # Laufapp Changelog
 
+## v0.2.22 – 2026-09-01
+
+- Automatische Quality-/Easy-Doppeltage werden normalerweise als **Qualität → Easy** geordnet; nur zukünftige, geplante und unveränderte Engine-Slots dürfen getauscht werden.
+- Zwischen Qualität, Race-Prep, Rennen, spezifischen Longruns und sehr langen Longruns ab 24 km beziehungsweise geschätzten 120 Minuten werden kalenderbasiert möglichst mindestens 48 Stunden eingeplant.
+- Manuelle, absolvierte, ausgefallene, verknüpfte, Longrun- und Renneinheiten bleiben geschützt; nicht lösbare Konflikte werden im lokalen Safety Check ausgewiesen.
+- Der Heute-Tab zeigt oberhalb von **Nächste Einheit** den jüngsten erfolgreichen Sync aus Health Auto Export oder abgeschlossenem Apple-Health-Hintergrundimport mit lokaler Uhrzeit und Quelle.
+- Fehlgeschlagene oder laufende Importe verändern die Anzeige nicht; vor dem ersten Erfolg erscheint ein klarer Leerzustand.
+- Der Ingress-robuste Inline-Header und die PWA-Icon-Härtung aus v0.2.21 bleiben erhalten. Keine Datenbankschemamigration und keine Änderung am separat versionierten Home-Assistant-Relay.
+- Lokale Validierung: **177/177 Pytests**, Syntax-/Security-Gates, 16-Wochen-Simulation, neun randomisierte Läuferprofile und direkter Uvicorn-E2E mit beiden Synchronisationswegen erfolgreich.
+
 ## v0.2.21 – 2026-09-01
 
 - Das freigegebene schwarze/neon-grüne Laufmotiv wird im sichtbaren Header jetzt direkt als PNG-Data-URI eingebettet; der Header benötigt keinen separaten Bildrequest mehr.
