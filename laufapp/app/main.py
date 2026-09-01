@@ -194,13 +194,8 @@ def api_move(wid:int,p:MovePayload):
 @app.post('/api/workouts/{wid}/status')
 def api_status(wid:int,p:StatusPayload):
     with db_conn() as c:
-        workout=c.execute("SELECT id,status,linked_run_id FROM workouts WHERE id=?",(wid,)).fetchone()
-        if not workout:raise HTTPException(404,'Training nicht gefunden.')
-        if workout['linked_run_id'] is not None:
-            if p.status!='completed':raise HTTPException(409,'Diese Einheit ist mit einem Lauf verknüpft. Löse zuerst die Aktivitätsverknüpfung, bevor der Abschlussstatus geändert wird.')
-            return {'ok':True}
-        c.execute("UPDATE workouts SET status=?,manual_override=1,modified_by='user' WHERE id=?",(p.status,wid))
-        return {'ok':True}
+        if not c.execute("SELECT id FROM workouts WHERE id=?",(wid,)).fetchone():raise HTTPException(404,'Training nicht gefunden.')
+        c.execute("UPDATE workouts SET status=?,manual_override=1,modified_by='user' WHERE id=?",(p.status,wid));return {'ok':True}
 @app.get('/api/races')
 def api_races():
     with db_conn() as c:return rows(c.execute("SELECT * FROM races ORDER BY active DESC,race_date").fetchall())
