@@ -102,6 +102,8 @@ Alle Responses-Aufrufe setzen `store=false`, damit kein abrufbares OpenAI-Respon
 
 KI-Vorschläge können den Trainingsplan nicht eigenständig verändern: Änderungen werden serverseitig gegen konservative Grenzen validiert, als offen gespeichert und müssen ausdrücklich bestätigt werden. Ein identischer offener Vorschlag wird nicht erneut angelegt.
 
+Die Oberfläche **Mehr → KI & Datenschutz** bearbeitet ausschließlich validierte Modell-, Budget- und Websuche-Einstellungen. Sie besitzt bewusst kein API-Key-Eingabefeld und erhält vom Server nur den booleschen Verbindungsstatus. Der geheime Key verbleibt in der Home-Assistant-App-Konfiguration.
+
 ## Supply Chain und CI
 
 Direkte Runtime-Abhängigkeiten sind gepinnt. `pip check` prüft die installierte Abhängigkeitskonsistenz; `pip-audit` blockiert bei bekannten Python-Abhängigkeitsschwachstellen. Bandit läuft über Backend und Custom Integration; neue Medium/High-Findings blockieren den Security-Gate.

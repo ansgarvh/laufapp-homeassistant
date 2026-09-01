@@ -258,5 +258,5 @@ def test_v023_ui_exposes_per_run_feedback_without_raw_gps_disclosure():
         assert text in js
     assert ".run-ai-analysis" in css and "@media(max-width:360px)" in css
     assert "assets/v0223.css?v=0.2.23" in index
-    assert "app.js?v=0.2.23" in index
-    assert "laufapp-v0.2.23" in sw and "assets/v0223.css?v=0.2.23" in sw
+    assert "app.js?v=0.2.24" in index
+    assert "laufapp-v0.2.24" in sw and "assets/v0223.css?v=0.2.23" in sw
