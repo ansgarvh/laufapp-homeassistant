@@ -102,7 +102,7 @@ def test_real_german_outdoor_name_is_imported_and_idempotent():
 
     first = hae.ingest(c, payload, training)
     assert first["runs_added"] == 1
-    assert first["samples_added"] == 3  # 2 HR + cadence summary
+    assert first["samples_added"] == 4  # 2 HR + cadence summary + separate total energy
     assert first["gps_points_added"] == 2
     assert training.matched == [1]
 
@@ -114,11 +114,20 @@ def test_real_german_outdoor_name_is_imported_and_idempotent():
     assert math.isclose(run["calories"], expected_kcal, rel_tol=0, abs_tol=1e-12)
     assert run["source"] == "apple_health_hae"
 
+    total = c.execute(
+        "SELECT metric_type,value,unit FROM run_samples WHERE metric_type='total_calories'"
+    ).fetchone()
+    assert total is not None
+    assert total["unit"] == "kcal"
+    assert math.isclose(total["value"], 13084.452032564825 / 4.184, rel_tol=0, abs_tol=1e-12)
+    assert run["calories"] < total["value"]  # totalEnergy never replaces active calories
+
     second = hae.ingest(c, payload, training)
     assert second["runs_existing"] == 1
     assert second["samples_added"] == 0
     assert second["gps_points_added"] == 0
     assert c.execute("SELECT COUNT(*) FROM runs").fetchone()[0] == 1
+    assert c.execute("SELECT COUNT(*) FROM run_samples WHERE metric_type='total_calories'").fetchone()[0] == 1
 
 
 def test_explicit_active_energy_summary_beats_time_series():
@@ -130,6 +139,7 @@ def test_explicit_active_energy_summary_beats_time_series():
     assert math.isclose(run["distance_km"], 0.932501084243316, rel_tol=0, abs_tol=1e-12)
     assert math.isclose(run["calories"], 311.05315882908627 / 4.184, rel_tol=0, abs_tol=1e-12)
     assert c.execute("SELECT COUNT(*) FROM gps_points").fetchone()[0] == 2
+    assert c.execute("SELECT COUNT(*) FROM run_samples WHERE metric_type='total_calories'").fetchone()[0] == 0
 
 
 def test_non_running_workout_is_still_not_imported():

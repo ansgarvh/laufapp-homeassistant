@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import math
 import re
 from typing import Any
@@ -74,8 +75,7 @@ def _energy_item_kcal(item: Any) -> float | None:
     return None
 
 
-def _active_energy_series_kcal(workout: dict[str, Any]) -> float | None:
-    values = workout.get("activeEnergy")
+def _energy_series_kcal(values: Any) -> float | None:
     if not isinstance(values, list) or not values:
         return None
     total = 0.0
@@ -85,13 +85,29 @@ def _active_energy_series_kcal(workout: dict[str, Any]) -> float | None:
             continue
         converted = _energy_item_kcal(item)
         # Never aggregate only a subset of an energy series: a mixed/unknown
-        # unit would silently understate calories.  In that case leave the
-        # legacy parser untouched instead of inventing a value.
+        # unit would silently understate calories.
         if converted is None:
             return None
         total += converted
         seen = True
     return total if seen else None
+
+
+def _active_energy_series_kcal(workout: dict[str, Any]) -> float | None:
+    return _energy_series_kcal(workout.get("activeEnergy"))
+
+
+def _total_energy_kcal(workout: dict[str, Any]) -> float | None:
+    """Return HAE total workout energy without confusing it with active energy.
+
+    Real HAE exports may provide ``totalEnergy`` either as a summary quantity or
+    as a time series.  It contains basal/resting energy as well, which is exactly
+    why it must remain a separate metric and must never replace runs.calories.
+    """
+    value = workout.get("totalEnergy")
+    if isinstance(value, dict):
+        return _energy_item_kcal(value)
+    return _energy_series_kcal(value)
 
 
 def prepare_real_hae_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -131,5 +147,48 @@ def prepare_real_hae_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
+def _store_total_energy_samples(c, payload: dict[str, Any]) -> int:
+    """Persist optional HAE total energy additively in the existing sample table."""
+    data = payload.get("data") if isinstance(payload, dict) else None
+    workouts = data.get("workouts") if isinstance(data, dict) else None
+    if not isinstance(workouts, list):
+        return 0
+    added = 0
+    for workout in workouts:
+        if not isinstance(workout, dict) or not is_running_workout(workout):
+            continue
+        workout_id = str(workout.get("id") or "").strip()
+        total_kcal = _total_energy_kcal(workout)
+        if not workout_id or total_kcal is None:
+            continue
+        run = c.execute("SELECT id,started_at FROM runs WHERE external_id=?", (workout_id,)).fetchone()
+        if not run:
+            continue
+        external_id = "hae:" + hashlib.sha256(
+            f"workout|{workout_id}|total_calories".encode("utf-8")
+        ).hexdigest()
+        existing = c.execute(
+            "SELECT id,value FROM run_samples WHERE external_id=?", (external_id,)
+        ).fetchone()
+        if existing:
+            if abs(float(existing["value"]) - total_kcal) > 1e-9:
+                c.execute(
+                    "UPDATE run_samples SET value=?,unit='kcal',sampled_at=?,source='health_auto_export' WHERE id=?",
+                    (total_kcal, str(run["started_at"]), int(existing["id"])),
+                )
+            continue
+        c.execute(
+            "INSERT INTO run_samples(external_id,run_id,metric_type,sampled_at,value,unit,source) VALUES(?,?,?,?,?,'kcal','health_auto_export')",
+            (external_id, int(run["id"]), "total_calories", str(run["started_at"]), total_kcal),
+        )
+        added += 1
+    return added
+
+
 def ingest(c, payload: dict[str, Any], training) -> dict[str, Any]:
-    return previous.ingest(c, prepare_real_hae_payload(payload), training)
+    prepared = prepare_real_hae_payload(payload)
+    result = previous.ingest(c, prepared, training)
+    extra = _store_total_energy_samples(c, prepared)
+    if extra and isinstance(result, dict):
+        result["samples_added"] = int(result.get("samples_added", 0)) + extra
+    return result
