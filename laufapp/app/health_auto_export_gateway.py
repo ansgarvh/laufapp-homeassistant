@@ -8,7 +8,7 @@ app network; the same strong Laufapp token is required on that internal hop.
 
 from fastapi import FastAPI, Header, Request
 
-from main_v0225 import APP_VERSION, process_health_auto_export_request
+from main_v0226 import APP_VERSION, process_health_auto_export_request
 
 app = FastAPI(
     title="Laufapp Health Sync Gateway",
@@ -62,7 +62,9 @@ async def home_assistant_relay(
         f"runs_existing={int(result.get('runs_existing', 0))} "
         f"samples_added={int(result.get('samples_added', 0))} "
         f"gps_points_added={int(result.get('gps_points_added', 0))} "
-        f"health_metrics_added={int(result.get('health_metrics_added', 0))}",
+        f"health_metrics_added={int(result.get('health_metrics_added', 0))} "
+        f"health_metrics_updated={int(result.get('health_metrics_updated', 0))} "
+        f"legacy_weight_rows_repaired={int(result.get('legacy_weight_rows_repaired', 0))}",
         flush=True,
     )
     return result

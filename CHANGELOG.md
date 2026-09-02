@@ -1,5 +1,15 @@
 # Laufapp Changelog
 
+## v0.2.26 – 2026-09-02
+
+- Aktuelle Health-Auto-Export-v2-Metriknamen `weight_body_mass` und `vo2max` ergänzt; bestehende ältere Aliase bleiben erhalten.
+- Aktuelles HAE-Schlafschema unterstützt: Schlafdauer wird aus Core-, REM- und Tiefschlaf summiert, ohne Wach- oder reine Im-Bett-Zeit einzurechnen. Historische `totalSleep`-/`asleep`-/`qty`-Formen bleiben kompatibel.
+- Gewichtseinheiten werden explizit nach Kilogramm normalisiert. Bereits gespeicherte HAE-Pfundwerte werden beim nächsten HAE-Import transaktional korrigiert; unbekannte Einheiten und unplausible Werte werden nicht als valide Recovery-Daten gespeichert.
+- HRV/SDNN, Ruhepuls und Schlafdauer erhalten kanonische Einheiten; Sekunden-HRV wird sicher nach Millisekunden umgerechnet.
+- Wiederholte HAE-Übertragungen dürfen einen bereits gespeicherten HAE-Wert desselben Zeitpunkts aktualisieren, wenn Apple beispielsweise eine zunächst unvollständige Schlafnacht später vervollständigt; XML-Importwerte werden dabei nicht überschrieben.
+- Neue Regressionen mit der aktuellen offiziellen HAE-Metrikstruktur prüfen Gewicht, Schlafphasen, HRV, Ruhepuls, VO₂max, Einheitenumrechnung, Deduplizierung und Altwertreparatur.
+- Additiver v0.2.26-Parser-/Entry-Point; keine Datenbankschemamigration und keine Änderung an Trainingsengine, Lauf-/GPS-Daten, Ingress-/Nabu-Sicherheit oder dem unabhängig versionierten Relay.
+
 ## v0.2.25 – 2026-09-01
 
 - Neue vollständige **Laufdetails**-Ansicht für erkannte absolvierte Läufe aus Fortschritt und Wochenübersicht, ohne die bestehende Bearbeitungs-/KI-Feedback-Funktion zu entfernen.
