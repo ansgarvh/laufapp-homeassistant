@@ -88,6 +88,7 @@ jobs:
           grep -q 'assets/v025.js?v=0.2.5' /tmp/root.html
           grep -q 'assets/v0225.css?v=0.2.25' /tmp/root.html
           grep -q 'assets/v0225.js?v=0.2.25' /tmp/root.html
+          grep -q 'assets/v0227.css?v=0.2.27' /tmp/root.html
           curl -fsS -o /tmp/races.json http://127.0.0.1:18099/api/v2/races
           curl -fsS -o /tmp/settings.json http://127.0.0.1:18099/api/settings
           curl -fsS -o /tmp/marks.json http://127.0.0.1:18099/api/v2/performance-marks
