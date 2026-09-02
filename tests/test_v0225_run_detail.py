@@ -106,6 +106,7 @@ def test_detailed_completed_run_endpoint_and_runtime_assets(setup_client):
     assert root.status_code == 200
     assert 'assets/v0225.css?v=0.2.25' in root.text
     assert 'assets/v0225.js?v=0.2.25' in root.text
+    assert 'assets/v0227.css?v=0.2.27' in root.text
 
 
 def test_separate_total_calories_are_exposed_without_overwriting_active(client):

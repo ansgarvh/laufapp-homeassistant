@@ -120,7 +120,7 @@ For running workouts:
 - Batch requests: On
 - Date range: **Previous 7 Days / Letzte 7 Tage**
 
-For recovery/health metrics, use a second HAE automation for resting heart rate, HRV, body mass, VO2max and sleep. `Previous 7 Days` is also recommended there. Current HAE JSON v2 sends these as `resting_heart_rate`, `heart_rate_variability`, `weight_body_mass`, `vo2max` and `sleep_analysis`; Laufapp v0.2.26 accepts those current identifiers as well as the older aliases. Sleep duration is calculated from Core + REM + Deep when HAE sends the current stage-based sleep shape.
+For recovery/health metrics, use a second HAE automation for resting heart rate, HRV, body mass, VO2max and sleep. `Previous 7 Days` is also recommended there. Current HAE JSON v2 sends these as `resting_heart_rate`, `heart_rate_variability`, `weight_body_mass`, `vo2max` and `sleep_analysis`; Laufapp v0.2.27 accepts those current identifiers as well as the older aliases. Sleep duration is calculated from Core + REM + Deep when HAE sends the current stage-based sleep shape.
 
 ## Why Previous 7 Days?
 

@@ -1,5 +1,15 @@
 # Laufapp Changelog
 
+## v0.2.27 – 2026-09-02
+
+- Geplante Qualitätseinheiten erhalten einen expliziten, strukturierten Ablauf aus Einlaufen, Hauptteil, optionaler Erholung und Auslaufen mit Distanz/Dauer, Wiederholungen, Pace und Ausführungsanweisung.
+- Bestehende Schwellen-, VO₂max-, Hügel-, Fartlek-, Progressions-, Marathonpace- und spezifische Longrun-Varianten werden in passende Phasen übersetzt; die bestehende Trainingsentscheidung und Gesamtdosis bleiben autoritativ.
+- Der bisherige Pace-Wert wird bei mehrphasigen Einheiten als Pace des Hauptteils gekennzeichnet. Lockere Ein-/Auslaufphasen priorisieren RPE 2–3; zeitbasierte Pausen werden separat ausgewiesen und können die aufgezeichnete Distanz erhöhen.
+- Phasen erscheinen bei der nächsten Einheit unter „Heute“ und in der Detailansicht geplanter beziehungsweise ausgefallener Einheiten der Wochenübersicht. Die Wochenkarte selbst öffnet diese Ansicht ebenfalls.
+- Phasen werden rückwärtskompatibel beim Auslesen ergänzt. Bereits geplante, manuell verschobene, absolvierte, ausgefallene und mit Läufen verknüpfte Einheiten werden nicht umgeschrieben; keine Datenbankschemamigration.
+- HAE-Altkompatibilität nachgeschärft: einheitenlose historische Schlafwerte werden weiterhin als Stunden interpretiert; explizit unbekannte VO₂max- und Ruhepuls-Einheiten werden validiert abgelehnt.
+- Neuer additiver v0.2.27-Entry-Point und Frontend-Stil; keine Änderung am unabhängig versionierten Home-Assistant-Relay.
+
 ## v0.2.26 – 2026-09-02
 
 - Aktuelle Health-Auto-Export-v2-Metriknamen `weight_body_mass` und `vo2max` ergänzt; bestehende ältere Aliase bleiben erhalten.

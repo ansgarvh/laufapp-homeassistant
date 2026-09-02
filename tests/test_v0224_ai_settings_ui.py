@@ -55,6 +55,6 @@ def test_more_exposes_ai_privacy_settings_without_api_key_in_browser():
     assert "api('api/settings',{method:'PATCH'" in js
     assert ".ai-settings-entry" in css and "@media(max-width:360px)" in css
     assert "assets/v0224.css?v=0.2.24" in index
-    assert "app.js?v=0.2.24" in index
+    assert "app.js?v=0.2.27" in index
     assert "laufapp-v0.2.24" in sw
     assert "assets/v0224.css?v=0.2.24" in sw

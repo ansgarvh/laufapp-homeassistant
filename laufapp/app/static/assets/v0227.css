@@ -1,0 +1,16 @@
+.workout-phase-section{margin-top:16px}.workout-phase-section h4{margin:0;font-size:11px;letter-spacing:-.01em}.workout-phases{display:grid;gap:8px;margin:9px 0 0;padding:0;list-style:none}
+.workout-phase{display:grid;grid-template-columns:34px minmax(0,1fr);gap:10px;align-items:start;padding:11px;border:1px solid var(--line);border-radius:16px;background:#fff}
+.workout-phase-index{width:34px;height:34px;display:grid;place-items:center;border-radius:12px;background:var(--surface2);color:var(--muted);font-size:11px;font-weight:850}
+.workout-phase.phase-work{border-color:#dcdafa;background:linear-gradient(135deg,#f7f6ff,#fff)}
+.workout-phase.phase-work .workout-phase-index{background:var(--accent);color:#fff}
+.workout-phase.phase-recovery .workout-phase-index{background:var(--goodSoft);color:var(--good)}
+.workout-phase-copy{min-width:0}
+.workout-phase-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.workout-phase-head strong{font-size:11px}
+.workout-phase-head b{font-size:12px;text-align:right}
+.workout-phase-meta{display:block;margin-top:4px;color:var(--accent2);font-size:9px;font-weight:750}
+.workout-phase-copy p{margin:5px 0 0;color:var(--muted);font-size:9px;line-height:1.45}
+.workout-phase-note{display:block;margin-top:8px;color:var(--muted);font-size:8px;line-height:1.45}
+.workout-phase-summary{display:block;margin-top:5px;color:var(--muted);font-size:9px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.week-workout.status-planned,.week-workout.status-skipped{cursor:pointer}
+@media(max-width:430px){.workout-phase-head{display:block}.workout-phase-head b{display:block;text-align:left;margin-top:2px}}
