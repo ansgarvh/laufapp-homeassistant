@@ -29,12 +29,12 @@ trap cleanup EXIT
 trap 'handle_signal SIGTERM 143' TERM
 trap 'handle_signal SIGINT 130' INT
 
-uvicorn main_v0225:app \
+uvicorn main_v0226:app \
   --host 0.0.0.0 --port 8099 \
   --no-proxy-headers --no-server-header \
   --limit-concurrency 64 --timeout-keep-alive 5 &
 MAIN_PID=$!
-echo "LAUFAPP_PROCESS_STARTED child=main pid=$MAIN_PID port=8099 version=0.2.25" >&2
+echo "LAUFAPP_PROCESS_STARTED child=main pid=$MAIN_PID port=8099 version=0.2.26" >&2
 
 READY=0
 for _ in $(seq 1 60); do
@@ -57,7 +57,7 @@ if [[ "$READY" != "1" ]]; then
 fi
 
 if python - <<'PY' >/dev/null 2>&1
-import health_auto_export_v0212 as hae
+import health_auto_export_v0226 as hae
 raise SystemExit(0 if hae.token_configuration_error() is None else 1)
 PY
 then
@@ -66,7 +66,7 @@ then
     --no-proxy-headers --no-server-header \
     --limit-concurrency 8 --timeout-keep-alive 5 &
   GATEWAY_PID=$!
-  echo "LAUFAPP_PROCESS_STARTED child=gateway pid=$GATEWAY_PID port=8100 version=0.2.25" >&2
+  echo "LAUFAPP_PROCESS_STARTED child=gateway pid=$GATEWAY_PID port=8100 version=0.2.26" >&2
 
   EXITED_PID=""
   set +e

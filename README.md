@@ -1,6 +1,16 @@
-# Laufapp v0.2.25
+# Laufapp v0.2.26
 
 Private, mobile-first Lauf-PWA für Home Assistant OS. Laufapp verbindet eine lokale Trainings-/Prognoseengine mit Apple-Health-Daten, Health Auto Export und einem optionalen OpenAI-Coach. Die Anwendung ist für einen einzelnen privaten Nutzer ausgelegt.
+
+
+## Neu in v0.2.26 – Health-Auto-Export-Gesundheitsdaten
+
+- Aktuelle HAE-v2-Bezeichner `weight_body_mass` und `vo2max` werden jetzt als Gewicht beziehungsweise VO₂max erkannt; die älteren Aliasnamen bleiben kompatibel.
+- Schlaf wird aus den von HAE gelieferten Phasen **Core + REM + Deep** als tatsächliche Schlafdauer berechnet. Bereits vorhandene `totalSleep`-/`asleep`-Varianten bleiben unterstützt; Wach- und Im-Bett-Zeit werden nicht als Schlaf addiert.
+- Gewicht wird einheitlich in Kilogramm gespeichert. Kilogramm, Gramm, Pfund und Stone werden explizit umgerechnet; unbekannte Einheiten werden nicht stillschweigend als Kilogramm fehlinterpretiert.
+- Bereits über HAE falsch als Pfund gespeicherte Gewichtswerte werden beim nächsten Health-Auto-Export-Import innerhalb derselben Datenbanktransaktion deterministisch nach Kilogramm korrigiert.
+- HRV wird als SDNN in Millisekunden, Ruhepuls als bpm und Schlaf als Stunden normalisiert. Unplausible oder unbekannte Werte werden abgelehnt, statt Recovery-Auswertungen zu verfälschen.
+- Keine Datenbankschemamigration und keine Änderung an Läufen, GPS-/Laufmessreihen, Trainingsengine, Ingress-Sicherheit oder dem separat versionierten Home-Assistant-Relay.
 
 
 ## Neu in v0.2.25 – vollständige Laufdetailansicht
@@ -190,7 +200,7 @@ Ausführliche Details und verbleibende Risiken stehen in `SECURITY.md` und `NABU
 
 ## Persistenz
 
-Benutzerdaten liegen im persistenten Home-Assistant-`/data`-Bereich. v0.2.25 benötigt **keine Datenbankschemamigration**.
+Benutzerdaten liegen im persistenten Home-Assistant-`/data`-Bereich. v0.2.26 benötigt **keine Datenbankschemamigration**.
 
 ## OpenAI
 
@@ -198,7 +208,7 @@ Der OpenAI-API-Key bleibt serverseitig in der Home-Assistant-App-Konfiguration u
 
 ## Release-Prüfungen
 
-Vor Merge laufen Python-Compilecheck einschließlich Custom Integration, JavaScript-Syntaxchecks, vollständige Pytest-Regression über den v0.2.25-Entry-Point, Laufdetail-/GPS-/Zeitreihen-/Downsampling-Regressionen, KI-Einstellungs-/Validierungs-/Datensparsamkeitsprüfungen, Kalender-/Synchronisationsregressionen, realitätsnahe HAE-v2-Regressionstests, >262144-Zeichen-Relaytest, Rate-/Slow-Body-Webhooktests, PNG-Decode-/Inline-Brand-Regression, 16-Wochen-Marathonsimulation, neun randomisierte Läuferprofile, `pip check`, `pip-audit`, Git-History-Secret-Scan, Bandit-Gate, Docker-Build, direkter HAE-E2E, interner Relay-E2E, externe Ingress-Spoofing-Negativtests und positive Home-Assistant-Ingress-Netzsimulation.
+Vor Merge laufen Python-Compilecheck einschließlich Custom Integration, JavaScript-Syntaxchecks, vollständige Pytest-Regression über den v0.2.26-Entry-Point, aktuelle HAE-v2-Gewicht-/Schlaf-/HRV-/Ruhepuls-/VO₂max-Regressionen, Laufdetail-/GPS-/Zeitreihen-/Downsampling-Regressionen, KI-Einstellungs-/Validierungs-/Datensparsamkeitsprüfungen, Kalender-/Synchronisationsregressionen, >262144-Zeichen-Relaytest, Rate-/Slow-Body-Webhooktests, PNG-Decode-/Inline-Brand-Regression, 16-Wochen-Marathonsimulation, neun randomisierte Läuferprofile, `pip check`, `pip-audit`, Git-History-Secret-Scan, Bandit-Gate, Docker-Build, direkter HAE-E2E, interner Relay-E2E, externe Ingress-Spoofing-Negativtests und positive Home-Assistant-Ingress-Netzsimulation.
 
 Statisch/isoliert und in Linux/Docker getestet. Die echte Home-Assistant-OS-/Custom-Integration-/Nabu-Casa-Remote-UI-/Health-Auto-Export-iPhone-Integration muss nach Installation auf dem Zielsystem lokal verifiziert werden.
 
@@ -210,7 +220,7 @@ export LAUFAPP_DATA_DIR=/tmp/laufapp-data
 export LAUFAPP_TRANSFER_DIR=/tmp/laufapp-transfer
 export LAUFAPP_TRUSTED_INGRESS_ONLY=0
 export LAUFAPP_HEALTH_AUTO_EXPORT_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
-uvicorn main_v0225:app --host 127.0.0.1 --port 8099 --no-proxy-headers
+uvicorn main_v0226:app --host 127.0.0.1 --port 8099 --no-proxy-headers
 ```
 
-Weitere Details: `SECURITY.md`, `NABU_CASA_HEALTH_SYNC.md`, `RELEASE_NOTES_v0.2.25.md`, `TRAINING_ENGINE.md`, `MIGRATIONS.md`.
+Weitere Details: `SECURITY.md`, `NABU_CASA_HEALTH_SYNC.md`, `RELEASE_NOTES_v0.2.26.md`, `TRAINING_ENGINE.md`, `MIGRATIONS.md`.

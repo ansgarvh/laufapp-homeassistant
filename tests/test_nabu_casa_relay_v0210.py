@@ -50,7 +50,36 @@ def _payload():
                     "name": "Resting Heart Rate",
                     "units": "bpm",
                     "data": [{"qty": 49, "date": "2026-08-30 06:00:00 +0200"}],
-                }
+                },
+                {
+                    "name": "heart_rate_variability",
+                    "units": "ms",
+                    "data": [{"qty": 58, "date": "2026-08-30 06:00:00 +0200"}],
+                },
+                {
+                    "name": "weight_body_mass",
+                    "units": "kg",
+                    "data": [{"qty": 88.2, "date": "2026-08-30 06:00:00 +0200"}],
+                },
+                {
+                    "name": "vo2max",
+                    "units": "mL/kg/min",
+                    "data": [{"qty": 54.3, "date": "2026-08-30 09:00:00 +0200"}],
+                },
+                {
+                    "name": "sleep_analysis",
+                    "units": "hr",
+                    "data": [{
+                        "date": "2026-08-30",
+                        "sleepStart": "2026-08-29 22:30:00 +0200",
+                        "sleepEnd": "2026-08-30 06:00:00 +0200",
+                        "core": 4.4,
+                        "rem": 1.4,
+                        "deep": 1.0,
+                        "awake": 0.7,
+                        "inBed": 7.5,
+                    }],
+                },
             ],
         }
     }
@@ -96,7 +125,7 @@ def test_home_assistant_relay_imports_and_retries_idempotently(monkeypatch, tmp_
     assert first_body["runs_added"] == 1
     assert first_body["samples_added"] == 2
     assert first_body["gps_points_added"] == 1
-    assert first_body["health_metrics_added"] == 1
+    assert first_body["health_metrics_added"] == 5
     assert second_body["ok"] is True
     assert second_body["runs_existing"] == 1
     assert second_body["samples_added"] == 0
