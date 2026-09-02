@@ -53,6 +53,23 @@ _DURATION_TO_HOURS = {
     "seconds": 1.0 / 3600.0,
 }
 
+_VO2MAX_UNITS = {
+    "ml/kg/min",
+    "ml/min/kg",
+    "ml/(kg*min)",
+    "ml/(min*kg)",
+}
+
+_RESTING_HR_UNITS = {
+    "bpm",
+    "count/min",
+    "counts/min",
+    "beat/min",
+    "beats/min",
+    "1/min",
+    "/min",
+}
+
 
 def configured_token() -> str:
     return previous.configured_token()
@@ -117,7 +134,11 @@ def _hours(value: Any, units: Any) -> float:
 def _sleep_hours(point: dict[str, Any], units: Any) -> float | None:
     for key in ("totalSleep", "asleep", "qty"):
         if point.get(key) is not None:
-            return _hours(point[key], point.get("units") or units)
+            # The legacy importer explicitly interpreted a missing sleep unit
+            # as hours. Preserve that established payload contract for the
+            # historical scalar fields while still requiring a unit for the
+            # newer stage-based shape.
+            return _hours(point[key], point.get("units") or units or "h")
 
     stage_values = [point.get(key) for key in ("core", "rem", "deep")]
     if not any(value is not None for value in stage_values):
@@ -126,6 +147,27 @@ def _sleep_hours(point: dict[str, Any], units: Any) -> float | None:
         _finite(value, "Schlafphase") for value in stage_values if value is not None
     )
     return _hours(total, point.get("units") or units)
+
+
+def _validated_unit(
+    units: Any,
+    label: str,
+    accepted: set[str],
+    *,
+    missing_default: str,
+) -> str:
+    raw = str(units or "").strip()
+    if not raw:
+        # Older HAE payloads omitted units for values whose HealthKit type has
+        # one canonical unit. Keep accepting those records without accepting
+        # an explicit, unknown unit.
+        return missing_default
+    normalized = _unit(raw).replace("·", "*")
+    if normalized not in accepted:
+        raise ValueError(
+            f"Nicht unterstützte {label}-Einheit in Health Auto Export: {raw[:24]}"
+        )
+    return missing_default
 
 
 def _normalize_metrics(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, int]]:
@@ -164,10 +206,16 @@ def _normalize_metrics(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[st
 
         if canonical in {"vo2max", "vo2_max"}:
             metric["name"] = "vo2_max"
-            metric["units"] = "mL/kg/min"
             for point in points:
                 if isinstance(point, dict) and point.get("qty") is not None:
+                    _validated_unit(
+                        point.get("units") or units,
+                        "VO2max",
+                        _VO2MAX_UNITS,
+                        missing_default="mL/kg/min",
+                    )
                     point["qty"] = _bounded(point["qty"], "VO2max", 5.0, 100.0)
+            metric["units"] = "mL/kg/min"
             seen["vo2max"] = seen.get("vo2max", 0) + len(points)
             continue
 
@@ -191,10 +239,16 @@ def _normalize_metrics(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[st
 
         if canonical == "resting_heart_rate":
             metric["name"] = canonical
-            metric["units"] = "bpm"
             for point in points:
                 if isinstance(point, dict) and point.get("qty") is not None:
+                    _validated_unit(
+                        point.get("units") or units,
+                        "Ruhepuls",
+                        _RESTING_HR_UNITS,
+                        missing_default="bpm",
+                    )
                     point["qty"] = _bounded(point["qty"], "Ruhepuls", 20.0, 260.0)
+            metric["units"] = "bpm"
             seen["resting_hr"] = seen.get("resting_hr", 0) + len(points)
             continue
 

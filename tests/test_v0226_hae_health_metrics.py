@@ -249,6 +249,73 @@ def test_invalid_health_units_and_values_fail_closed():
     except ValueError as exc:
         assert "HRV" in str(exc)
 
+    bad_vo2max = current_hae_payload()
+    bad_vo2max["data"]["metrics"] = [
+        {
+            "name": "vo2max",
+            "units": "percent",
+            "data": [{"qty": 54, "date": "2026-09-01"}],
+        }
+    ]
+    try:
+        hae.ingest(c, bad_vo2max, TrainingStub())
+        assert False, "unknown VO2max units must not be relabeled"
+    except ValueError as exc:
+        assert "VO2max-Einheit" in str(exc)
+
+    bad_resting_hr = current_hae_payload()
+    bad_resting_hr["data"]["metrics"] = [
+        {
+            "name": "resting_heart_rate",
+            "units": "percent",
+            "data": [{"qty": 49, "date": "2026-09-01"}],
+        }
+    ]
+    try:
+        hae.ingest(c, bad_resting_hr, TrainingStub())
+        assert False, "unknown resting-heart-rate units must not be relabeled"
+    except ValueError as exc:
+        assert "Ruhepuls-Einheit" in str(exc)
+
+
+def test_unitless_legacy_health_payloads_keep_their_canonical_defaults():
+    c = conn()
+    payload = {
+        "data": {
+            "workouts": [],
+            "metrics": [
+                {
+                    "name": "sleep_analysis",
+                    "data": [
+                        {
+                            "totalSleep": 7.25,
+                            "date": "2026-09-01",
+                        }
+                    ],
+                },
+                {
+                    "name": "vo2_max",
+                    "data": [{"qty": 54.0, "date": "2026-09-01 08:00:00 +0200"}],
+                },
+                {
+                    "name": "resting_heart_rate",
+                    "data": [{"qty": 49, "date": "2026-09-01 06:00:00 +0200"}],
+                },
+            ],
+        }
+    }
+
+    result = hae.ingest(c, payload, TrainingStub())
+    assert result["health_metrics_added"] == 3
+    rows = {
+        row["metric_type"]: row
+        for row in c.execute("SELECT metric_type,value,unit FROM health_metrics")
+    }
+    assert rows["sleep_hours"]["value"] == 7.25
+    assert rows["sleep_hours"]["unit"] == "h"
+    assert rows["vo2max"]["unit"] == "mL/kg/min"
+    assert rows["resting_hr"]["unit"] == "bpm"
+
 
 def test_current_health_metrics_end_to_end_through_hardened_http(monkeypatch, setup_client):
     token = "9f4a6c2d8e1b7a305c9d4e6f1a2b8c70d5e3f9a1c6b4d8e2f7a0c3b5d9e1f6a4"
